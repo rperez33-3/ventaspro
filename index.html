@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VentasPro | Sistema de Gestión</title>
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlZlbnRhc1BybyIsCiAgInNob3J0X25hbWUiOiAiVmVudGFzUHJvIiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMxZTNhNWYiLAogICJ0aGVtZV9jb2xvciI6ICIjMWUzYTVmIgp9">
+    <meta name="theme-color" content="#1e3a5f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <style>
+        :root {
+            --primary: #1e3a5f; --primary-light: #2c5282; --accent: #c9a84c;
+            --success: #2d6a4f; --danger: #9b2226; --warning: #ca8a04; --info: #2563eb;
+            --bg: #f1f5f9; --card: #ffffff; --text: #1e293b; --text-light: #64748b;
+            --border: #e2e8f0; --shadow: 0 4px 20px rgba(0,0,0,0.08); --radius: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        
+        .login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #1e3a5f, #0f1f38); padding: 20px; }
+        .login-box { background: white; border-radius: 20px; padding: 35px 25px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 25px 60px rgba(0,0,0,0.4); }
+        .login-box h2 { color: var(--primary); margin-bottom: 5px; font-size: 1.5em; }
+        .login-box input { width: 100%; padding: 12px; border: 2px solid var(--border); border-radius: 10px; font-size: 1em; text-align: center; margin: 8px 0; }
+        .login-box input:focus { border-color: var(--primary); outline: none; }
+        .login-error { color: var(--danger); font-size: 0.85em; display: none; margin-top: 5px; }
+        
+        .app-container { display: none; }
+        .app-container.active { display: block; }
+        
+        .top-bar { background: var(--primary); color: white; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 0.82em; }
+        .top-bar input { width: 75px; padding: 5px 8px; border: none; border-radius: 10px; text-align: center; font-weight: bold; font-size: 0.9em; }
+        .top-bar button { background: var(--accent); color: #1a1a1a; border: none; padding: 5px 10px; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 0.85em; }
+        
+        .header { background: linear-gradient(135deg, #1e3a5f, #2c5282); color: white; padding: 14px 20px; text-align: center; border-bottom: 3px solid var(--accent); }
+        .header h1 { font-size: 1.3em; }
+        
+        .nav { display: flex; gap: 2px; background: white; padding: 5px 8px; overflow-x: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 50; }
+        .nav button { padding: 11px 13px; border: none; background: transparent; color: var(--text-light); cursor: pointer; font-weight: 600; font-size: 0.78em; white-space: nowrap; border-bottom: 3px solid transparent; }
+        .nav button.active { color: var(--primary); border-bottom-color: var(--accent); }
+        
+        .main-content { max-width: 1200px; margin: 15px auto; padding: 0 12px 60px; }
+        .module { display: none; }
+        .module.active { display: block; }
+        
+        .card { background: var(--card); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); margin-bottom: 15px; }
+        .card-header { font-weight: 700; color: var(--primary); margin-bottom: 15px; font-size: 1.05em; border-bottom: 2px solid var(--border); padding-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; }
+        
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-weight: 600; font-size: 0.85em; margin-bottom: 4px; color: var(--text); }
+        .form-group label .required { color: var(--danger); }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 2px solid var(--border); border-radius: 8px; font-size: 0.9em; font-family: inherit; background: #fafbfc; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--primary); outline: none; background: white; }
+        
+        .btn { padding: 10px 16px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.88em; transition: all 0.3s; font-family: inherit; display: inline-flex; align-items: center; gap: 5px; justify-content: center; }
+        .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-warning { background: var(--warning); color: #1a1a1a; }
+        .btn-info { background: var(--info); color: white; }
+        .btn-accent { background: var(--accent); color: #1a1a1a; }
+        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+        .btn-sm { padding: 6px 10px; font-size: 0.75em; }
+        .btn-xs { padding: 4px 7px; font-size: 0.7em; }
+        .btn-block { width: 100%; }
+        .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 0.8em; }
+        th { background: #f1f5f9; padding: 10px 7px; text-align: left; font-weight: 700; font-size: 0.78em; text-transform: uppercase; color: var(--primary); border-bottom: 2px solid var(--border); }
+        td { padding: 8px 7px; border-bottom: 1px solid #f1f5f9; }
+        tr:hover td { background: #f8fafc; }
+        
+        .badge { padding: 3px 8px; border-radius: 15px; font-weight: 700; font-size: 0.72em; display: inline-block; }
+        .badge-pendiente { background: #fef3c7; color: #92400e; }
+        .badge-abonado { background: #dbeafe; color: #1e40af; }
+        .badge-pagado { background: #dcfce7; color: #166534; }
+        .badge-stock-ok { background: #dcfce7; color: #166534; }
+        .badge-stock-low { background: #fee2e2; color: #991b1b; }
+        
+        .stats-card { background: white; border-radius: var(--radius); padding: 15px 10px; text-align: center; box-shadow: var(--shadow); border-top: 3px solid var(--accent); }
+        .stats-card .stat-value { font-size: 1.3em; font-weight: 800; color: var(--primary); }
+        .stats-card .stat-value-sm { font-size: 0.8em; font-weight: 600; color: var(--text-light); margin-top: 2px; }
+        .stats-card .stat-label { font-size: 0.7em; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .cart-item { display: flex; justify-content: space-between; padding: 8px 12px; background: #f8fafc; border-radius: 6px; margin-bottom: 6px; border-left: 3px solid var(--accent); font-size: 0.9em; }
+        .cart-total { background: var(--primary); color: white; padding: 12px; border-radius: 8px; text-align: center; font-size: 1.1em; font-weight: 700; margin: 10px 0; }
+        
+        .precio-usd { color: var(--primary); font-weight: 700; }
+        .precio-ves { color: var(--success); font-weight: 600; font-size: 0.85em; }
+        
+        .sync-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+        .sync-ok { background: #34a853; }
+        .sync-err { background: #ea4335; }
+        
+        .cliente-resumen { background: #f0f6ff; border: 2px solid var(--primary-light); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        
+        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+        .toast { color: white; padding: 12px 18px; border-radius: 8px; font-weight: 600; font-size: 0.85em; animation: slideIn 0.3s ease; max-width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        .toast.success { background: var(--success); }
+        .toast.error { background: var(--danger); }
+        .toast.warning { background: var(--warning); color: #1a1a1a; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15,31,56,0.7); z-index: 200; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+        .modal-overlay.active { display: flex; }
+        .modal { background: white; border-radius: 16px; padding: 25px 30px; max-width: 450px; width: 90%; max-height: 85vh; overflow-y: auto; box-shadow: 0 25px 60px rgba(0,0,0,0.3); }
+        .modal h3 { color: var(--primary); margin-bottom: 15px; font-size: 1.1em; border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
+        
+        .install-banner { display: none; position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #1a1a1a; padding: 10px 20px; border-radius: 25px; font-weight: 700; cursor: pointer; z-index: 150; box-shadow: 0 10px 30px rgba(0,0,0,0.3); white-space: nowrap; font-size: 0.9em; }
+        
+        .footer-signature { position: fixed; bottom: 10px; left: 15px; font-size: 0.7em; color: var(--text-light); opacity: 0.7; pointer-events: none; z-index: 50; }
+        .footer-signature span { color: var(--accent); font-weight: 700; }
+        
+        @media (max-width: 900px) { .grid-5 { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 768px) { .grid-2, .grid-3, .grid-5 { grid-template-columns: 1fr; } .top-bar { font-size: 0.72em; } table { font-size: 0.7em; } .nav button { padding: 8px 10px; font-size: 0.7em; } }
+    </style>
+</head>
+<body>
+
+<!-- ==================== LOGIN ==================== -->
+<div class="login-screen" id="loginScreen">
+    <div class="login-box">
+        <h2>🔐 VentasPro</h2>
+        <p style="color:var(--text-light);font-size:0.9em;">Sistema sincronizado en la nube</p>
+        <input type="password" id="passwordInput" placeholder="Contraseña" onkeypress="if(event.key==='Enter')verificarPassword()">
+        <button class="btn btn-primary btn-block" onclick="verificarPassword()">🔓 Ingresar</button>
+        <p class="login-error" id="loginError">❌ Contraseña incorrecta</p>
+        <hr style="margin:15px 0;border-color:var(--border);">
+        <button class="btn btn-warning btn-block btn-sm" onclick="mostrarCambiarPassword()">⚙️ Cambiar Contraseña</button>
+        <div id="cambiarPasswordBox" style="display:none;margin-top:10px;">
+            <input type="password" id="oldPassword" placeholder="Contraseña actual">
+            <input type="password" id="newPassword" placeholder="Nueva contraseña (mín 4)">
+            <input type="password" id="confirmPassword" placeholder="Confirmar nueva contraseña">
+            <button class="btn btn-accent btn-block btn-sm" onclick="cambiarPassword()">💾 Guardar Nueva</button>
+            <button class="btn btn-outline btn-block btn-sm" onclick="document.getElementById('cambiarPasswordBox').style.display='none'">Cancelar</button>
+            <p style="color:var(--danger);font-size:0.8em;display:none;" id="cambiarPasswordError"></p>
+        </div>
+        <small style="display:block;margin-top:15px;color:var(--text-light);">Desarrollado por <strong style="color:var(--accent);">Rony Pérez</strong></small>
+    </div>
+</div>
+
+<!-- ==================== APP ==================== -->
+<div class="app-container" id="appContainer">
+
+<div class="top-bar">
+    <span>🏪 VentasPro | <span class="sync-dot sync-ok" id="syncDot"></span><span id="syncStatus">Conectado</span></span>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <label style="color:white;">💲 Tasa:</label>
+        <input type="number" id="tasaDolar" step="0.01">
+        <button onclick="guardarTasa()">Actualizar</button>
+        <span id="fechaHora" style="font-size:0.75em;"></span>
+        <button onclick="mostrarCambiarPasswordDesdeApp()" style="background:var(--warning);">⚙️</button>
+        <button onclick="cerrarSesion()" style="background:var(--danger);color:white;">🚪</button>
+    </div>
+</div>
+
+<div class="header"><h1>📊 Sistema de Gestión de Ventas</h1></div>
+
+<div class="nav">
+    <button class="active" onclick="cambiarModulo('inicio')">🏠 Inicio</button>
+    <button onclick="cambiarModulo('productos')">📦 Productos</button>
+    <button onclick="cambiarModulo('clientes')">👥 Clientes</button>
+    <button onclick="cambiarModulo('pedidos')">🧾 Pedido</button>
+    <button onclick="cambiarModulo('historial')">📋 Historial</button>
+    <button onclick="cambiarModulo('cobranza')">💰 Cobranza</button>
+    <button onclick="cambiarModulo('inversiones')">💸 Inversiones</button>
+    <button onclick="cambiarModulo('ganancias')">📈 Ganancias</button>
+</div>
+
+<div class="main-content">
+
+<!-- ========== INICIO ========== -->
+<div id="modulo-inicio" class="module active">
+    <div class="grid-5" id="statsCards"></div>
+    <div class="grid-2" style="margin-top:15px;">
+        <div class="card"><div class="card-header">🕐 Últimos Pedidos</div><div id="ultimosPedidos" style="overflow-x:auto;"></div></div>
+        <div class="card"><div class="card-header">⚠️ Deudas Pendientes</div><div id="deudasPendientes" style="overflow-x:auto;"></div></div>
+    </div>
+</div>
+
+<!-- ========== PRODUCTOS ========== -->
+<div id="modulo-productos" class="module">
+    <div class="grid-2">
+        <div class="card">
+            <div class="card-header">➕ Agregar Producto</div>
+            <input type="hidden" id="editandoProdId">
+            <div class="form-group"><label>Nombre <span class="required">*</span></label><input type="text" id="nombreProd" placeholder="Ej: Galleta Chocolate"></div>
+            <div class="form-group"><label>Categoría</label><select id="catProd"><option>Galletas</option><option>Helados</option><option>Tortas</option><option>Bebidas</option><option>Snacks</option><option>Otros</option></select></div>
+            <div class="form-group"><label>Precio USD ($) <span class="required">*</span></label><input type="number" id="precioProd" step="0.01" placeholder="0.00"></div>
+            <div class="form-group"><label>Stock <span class="required">*</span></label><input type="number" id="stockProd" placeholder="0"></div>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="guardarProducto()">✅ Guardar</button>
+                <button class="btn btn-warning" id="btnCancelarProd" style="display:none;" onclick="cancelarEdicionProd()">Cancelar</button>
+            </div>
+        </div>
+        <div class="card"><div class="card-header">📋 Inventario</div><div id="tablaProductos" style="overflow-x:auto;"></div></div>
+    </div>
+</div>
+
+<!-- ========== CLIENTES ========== -->
+<div id="modulo-clientes" class="module">
+    <div class="grid-2">
+        <div class="card">
+            <div class="card-header">➕ Agregar Cliente</div>
+            <input type="hidden" id="editandoCliId">
+            <div class="form-group"><label>Nombre <span class="required">*</span></label><input type="text" id="nombreCli" placeholder="Ej: María López"></div>
+            <div class="form-group"><label>Teléfono</label><input type="text" id="telCli" placeholder="0412-1234567"></div>
+            <div class="form-group"><label>Depto</label><input type="text" id="deptCli" placeholder="Ej: Ventas"></div>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="guardarCliente()">✅ Guardar</button>
+                <button class="btn btn-warning" id="btnCancelarCli" style="display:none;" onclick="cancelarEdicionCli()">Cancelar</button>
+            </div>
+        </div>
+        <div class="card"><div class="card-header">👥 Clientes</div><div id="tablaClientes" style="overflow-x:auto;"></div></div>
+    </div>
+</div>
+
+<!-- ========== PEDIDOS ========== -->
+<div id="modulo-pedidos" class="module">
+    <div class="grid-2">
+        <div class="card">
+            <div class="card-header">🧾 Nuevo Pedido</div>
+            <div class="form-group"><label>📅 Fecha</label><input type="date" id="fechaPedido"></div>
+            <div class="form-group"><label>Cliente Existente</label><select id="clientePedido" onchange="clientePedidoChange()"><option value="">-- Seleccionar --</option></select></div>
+            <div style="text-align:center;color:var(--text-light);margin:8px 0;">— O NUEVO CLIENTE —</div>
+            <div class="form-group"><label>Nombre Nuevo Cliente</label><input type="text" id="nuevoClienteNombre" placeholder="Si no existe en la lista"></div>
+            <hr style="border-color:var(--border);margin:15px 0;">
+            <div class="form-group"><label>Producto <span class="required">*</span></label><select id="productoPedido"><option value="">-- Seleccionar --</option></select></div>
+            <div class="form-group"><label>Cantidad</label><input type="number" id="cantidadPedido" value="1" min="1"></div>
+            <button class="btn btn-accent btn-block" onclick="agregarAlCarrito()">➕ Agregar al Carrito</button>
+        </div>
+        <div class="card">
+            <div class="card-header">🛍️ Carrito <button class="btn btn-danger btn-sm" onclick="vaciarCarrito()" style="margin-left:auto;">🗑️ Vaciar</button></div>
+            <div id="carritoLista"><p style="color:var(--text-light);text-align:center;">Vacío</p></div>
+            <div class="cart-total">TOTAL: <span id="totalCarritoUSD">$0.00</span> | <span id="totalCarritoVES">Bs 0.00</span></div>
+            <button class="btn btn-success btn-block" onclick="registrarPedido()">✅ Registrar Pedido</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========== HISTORIAL ========== -->
+<div id="modulo-historial" class="module">
+    <div class="card"><div class="card-header">📋 Historial de Pedidos</div><div id="tablaHistorial" style="overflow-x:auto;"></div></div>
+</div>
+
+<!-- ========== COBRANZA ========== -->
+<div id="modulo-cobranza" class="module">
+    <div class="card">
+        <div class="card-header">💰 Cobranza</div>
+        <div class="form-group"><label>🔍 Seleccionar Cliente</label><select id="selectClienteCobranza" onchange="cargarCobranza()"><option value="">-- Seleccionar --</option></select></div>
+        <div id="cobranzaDetalle"></div>
+    </div>
+</div>
+
+<!-- ========== INVERSIONES ========== -->
+<div id="modulo-inversiones" class="module">
+    <div class="grid-2">
+        <div class="card">
+            <div class="card-header">💸 Registrar Inversión</div>
+            <div class="form-group"><label>📅 Fecha</label><input type="date" id="fechaInversion"></div>
+            <div class="form-group"><label>Categoría</label><select id="catInversion"><option>Galletas</option><option>Helados</option><option>Tortas</option><option>Bebidas</option><option>Snacks</option><option>Otros</option></select></div>
+            <div class="form-group"><label>Descripción</label><input type="text" id="descInversion" placeholder="Ej: 200 galletas"></div>
+            <div class="form-group"><label>Monto Bs <span class="required">*</span></label><input type="number" id="montoBsInversion" step="0.01" placeholder="0.00" oninput="calcInvUSD()"></div>
+            <div class="form-group"><label>Tasa del día</label><input type="number" id="tasaInversion" step="0.01" oninput="calcInvUSD()"></div>
+            <div style="margin-bottom:10px;">Equiv USD: <strong class="precio-usd" id="inversionUSD">$0.00</strong></div>
+            <button class="btn btn-accent btn-block" onclick="registrarInversion()">💸 Registrar</button>
+        </div>
+        <div class="card"><div class="card-header">📋 Historial Inversiones</div><div id="tablaInversiones" style="overflow-x:auto;"></div></div>
+    </div>
+</div>
+
+<!-- ========== GANANCIAS ========== -->
+<div id="modulo-ganancias" class="module">
+    <div class="card"><div class="card-header">📈 Ganancias por Categoría</div><div class="grid-3" id="gananciasCategorias"></div><div id="detalleGanancias" style="margin-top:15px;overflow-x:auto;"></div></div>
+</div>
+
+</div>
+
+<!-- BOTÓN INSTALAR APP -->
+<div class="install-banner" id="installBanner" onclick="instalarApp()">📱 Instalar como App</div>
+
+<div class="footer-signature">Desarrollado por <span>Rony Pérez</span> © 2026</div>
+<div class="toast-container" id="toastContainer"></div>
+</div>
+
+<script>
+// ⚠️ PEGA AQUÍ LA URL DE TU GOOGLE APPS SCRIPT
+const API_URL = 'https://script.google.com/macros/s/AKfycbwc9Nn25PAFKVUlB21lg5Zou_utZb2AkQZdMcDsqO94yqEu9L4tnpqSlwKL2jDBLJXv/exec';
+
+let tasaDolar = 45, password = 'admin2026';
+let productos = [], clientes = [], pedidos = [], abonos = [], inversiones = [];
+let carrito = [];
+let deferredPrompt;
+
+// ==================== PWA - INSTALAR COMO APP ====================
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById('installBanner').style.display = 'block';
+});
+
+function instalarApp() {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+            if (choiceResult.outcome === 'accepted') {
+                mostrarToast('✅ App instalada correctamente');
+            }
+            deferredPrompt = null;
+            document.getElementById('installBanner').style.display = 'none';
+        });
+    }
+}
+
+window.addEventListener('appinstalled', () => {
+    document.getElementById('installBanner').style.display = 'none';
+    mostrarToast('✅ App instalada');
+});
+
+// ==================== SERVICE WORKER ====================
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        navigator.serviceWorker.register('data:application/javascript,' + encodeURIComponent(
+            "const CACHE_NAME='ventaspro-v1';" +
+            "self.addEventListener('install',function(e){e.waitUntil(caches.open(CACHE_NAME));self.skipWaiting();});" +
+            "self.addEventListener('activate',function(e){e.waitUntil(clients.claim());});" +
+            "self.addEventListener('fetch',function(e){e.respondWith(fetch(e.request).catch(function(){return caches.match(e.request);}));});"
+        )).catch(function(err) { console.log('SW:', err); });
+    });
+}
+
+// ==================== API ====================
+async function callAPI(funcion, ...args) {
+    try {
+        let url = API_URL + '?funcion=' + encodeURIComponent(funcion);
+        if (args.length > 0) url += '&args=' + encodeURIComponent(JSON.stringify(args));
+        let resp = await fetch(url);
+        let data = await resp.json();
+        document.getElementById('syncDot').className = 'sync-dot sync-ok';
+        document.getElementById('syncStatus').textContent = 'Conectado';
+        return data;
+    } catch(e) {
+        document.getElementById('syncDot').className = 'sync-dot sync-err';
+        document.getElementById('syncStatus').textContent = 'Offline';
+        mostrarToast('⚠️ Sin conexión', 'warning');
+        return null;
+    }
+}
+
+async function cargarDatos() {
+    let data = await callAPI('getAllData');
+    if (data) {
+        tasaDolar = data.tasa || 45;
+        password = data.password || 'admin2026';
+        productos = (data.productos||[]).map(p => ({id:p[0],nombre:p[1],categoria:p[2],precio:parseFloat(p[3]||0),stock:parseInt(p[4]||0),stockMinimo:parseInt(p[5]||5)}));
+        clientes = (data.clientes||[]).map(c => ({id:c[0],nombre:c[1],telefono:c[2]||'',departamento:c[3]||''}));
+        pedidos = (data.pedidos||[]).map(p => {
+            let items = [];
+            try { items = JSON.parse(p[4]||'[]'); } catch(e) {}
+            return {id:p[0],fecha:p[1],clienteId:p[2],clienteNombre:p[3],items:items,total:parseFloat(p[5]||0),totalVES:parseFloat(p[6]||0),tasaDolar:parseFloat(p[7]||tasaDolar),estado:p[8]||'Pendiente',abonado:parseFloat(p[9]||0),fechaPago:p[10]||''};
+        });
+        abonos = (data.abonos||[]).map(a => ({id:a[0],fecha:a[1],pedidoId:a[2],cliente:a[3],montoUSD:parseFloat(a[4]||0),montoVES:parseFloat(a[5]||0),tasaPago:parseFloat(a[6]||tasaDolar),refPago:a[7]||'',banco:a[8]||'',nota:a[9]||''}));
+        inversiones = (data.inversiones||[]).map(i => ({id:i[0],fecha:i[1],categoria:i[2],descripcion:i[3]||'',montoBs:parseFloat(i[4]||0),tasaInversion:parseFloat(i[5]||tasaDolar),montoUSD:parseFloat(i[6]||0)}));
+        sessionStorage.setItem('vp_pass', password);
+    }
+}
+
+function mostrarToast(m, t='success') {
+    let el = document.createElement('div');
+    el.className = 'toast '+t; el.textContent = m;
+    document.getElementById('toastContainer').appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+}
+
+function actualizarFechaHora() {
+    document.getElementById('fechaHora').textContent = new Date().toLocaleDateString('es-VE', {hour:'2-digit',minute:'2-digit'});
+}
+
+function cambiarModulo(mod) {
+    document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
+    document.getElementById('modulo-'+mod).classList.add('active');
+    document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+    if (event && event.target) event.target.classList.add('active');
+    cargarTodo();
+}
+
+function fechaInputAFormato(d) {
+    if (!d) return new Date().toLocaleDateString('es-VE');
+    let p = d.split('-'); return p[2]+'/'+p[1]+'/'+p[0];
+}
+
+// ==================== AUTENTICACIÓN ====================
+async function verificarPassword() {
+    await cargarDatos();
+    let input = document.getElementById('passwordInput').value;
+    if (input === password) {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appContainer').classList.add('active');
+        sessionStorage.setItem('vp_auth', 'true');
+        iniciarApp();
+    } else {
+        document.getElementById('loginError').style.display = 'block';
+        setTimeout(() => document.getElementById('loginError').style.display = 'none', 2000);
+    }
+}
+
+function mostrarCambiarPassword() {
+    let box = document.getElementById('cambiarPasswordBox');
+    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    document.getElementById('oldPassword').value = '';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('confirmPassword').value = '';
+}
+
+function mostrarCambiarPasswordDesdeApp() {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('appContainer').classList.remove('active');
+    document.getElementById('passwordInput').value = '';
+    mostrarCambiarPassword();
+    document.getElementById('cambiarPasswordBox').style.display = 'block';
+}
+
+async function cambiarPassword() {
+    let oldPass = document.getElementById('oldPassword').value;
+    let newPass = document.getElementById('newPassword').value;
+    let confirmPass = document.getElementById('confirmPassword').value;
+    let errorEl = document.getElementById('cambiarPasswordError');
+    
+    if (oldPass !== password) { errorEl.textContent = '❌ Contraseña actual incorrecta'; errorEl.style.display = 'block'; return; }
+    if (newPass.length < 4) { errorEl.textContent = '❌ Mínimo 4 caracteres'; errorEl.style.display = 'block'; return; }
+    if (newPass !== confirmPass) { errorEl.textContent = '❌ No coinciden'; errorEl.style.display = 'block'; return; }
+    
+    let result = await callAPI('cambiarPassword', newPass);
+    if (result && result.ok) {
+        password = newPass; sessionStorage.setItem('vp_pass', password);
+        errorEl.style.display = 'none'; document.getElementById('cambiarPasswordBox').style.display = 'none';
+        mostrarToast('✅ Contraseña actualizada');
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appContainer').classList.add('active');
+        iniciarApp();
+    } else { errorEl.textContent = '❌ Error de conexión'; errorEl.style.display = 'block'; }
+}
+
+function cerrarSesion() {
+    if (confirm('¿Cerrar sesión?')) { sessionStorage.removeItem('vp_auth'); location.reload(); }
+}
+
+if (sessionStorage.getItem('vp_auth') === 'true') {
+    password = sessionStorage.getItem('vp_pass') || 'admin2026';
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appContainer').classList.add('active');
+    iniciarApp();
+}
+
+// ==================== PRODUCTOS ====================
+async function guardarProducto() {
+    let id = document.getElementById('editandoProdId').value || '';
+    let n = document.getElementById('nombreProd').value.trim();
+    let c = document.getElementById('catProd').value;
+    let p = document.getElementById('precioProd').value;
+    let s = document.getElementById('stockProd').value;
+    if (!n || !p || !s) { mostrarToast('⚠️ Completa los campos', 'warning'); return; }
+    await callAPI('guardarProducto', id, n, c, p, s);
+    limpiarFormProd(); await cargarDatos(); cargarTodo();
+    mostrarToast('✅ Producto guardado');
+}
+function editarProducto(id) {
+    let prod = productos.find(p => p.id === id);
+    if (!prod) return;
+    document.getElementById('editandoProdId').value = prod.id;
+    document.getElementById('nombreProd').value = prod.nombre;
+    document.getElementById('catProd').value = prod.categoria;
+    document.getElementById('precioProd').value = prod.precio;
+    document.getElementById('stockProd').value = prod.stock;
+    document.getElementById('btnCancelarProd').style.display = 'inline-flex';
+}
+function cancelarEdicionProd() { limpiarFormProd(); }
+async function eliminarProducto(id) {
+    if (!confirm('¿Eliminar?')) return;
+    await callAPI('eliminarProducto', id);
+    await cargarDatos(); cargarTodo();
+    mostrarToast('🗑️ Producto eliminado');
+}
+function limpiarFormProd() {
+    document.getElementById('editandoProdId').value = '';
+    document.getElementById('nombreProd').value = '';
+    document.getElementById('precioProd').value = '';
+    document.getElementById('stockProd').value = '';
+    document.getElementById('btnCancelarProd').style.display = 'none';
+}
+
+// ==================== CLIENTES ====================
+async function guardarCliente() {
+    let id = document.getElementById('editandoCliId').value || '';
+    let n = document.getElementById('nombreCli').value.trim();
+    let t = document.getElementById('telCli').value.trim();
+    let d = document.getElementById('deptCli').value.trim();
+    if (!n) { mostrarToast('⚠️ Nombre obligatorio', 'warning'); return; }
+    await callAPI('guardarCliente', id, n, t, d);
+    limpiarFormCli(); await cargarDatos(); cargarTodo();
+    mostrarToast('✅ Cliente guardado');
+}
+function editarCliente(id) {
+    let cli = clientes.find(c => c.id === id);
+    if (!cli) return;
+    document.getElementById('editandoCliId').value = cli.id;
+    document.getElementById('nombreCli').value = cli.nombre;
+    document.getElementById('telCli').value = cli.telefono;
+    document.getElementById('deptCli').value = cli.departamento;
+    document.getElementById('btnCancelarCli').style.display = 'inline-flex';
+}
+function cancelarEdicionCli() { limpiarFormCli(); }
+async function eliminarCliente(id) {
+    if (!confirm('¿Eliminar?')) return;
+    await callAPI('eliminarCliente', id);
+    await cargarDatos(); cargarTodo();
+    mostrarToast('🗑️ Cliente eliminado');
+}
+function limpiarFormCli() {
+    document.getElementById('editandoCliId').value = '';
+    document.getElementById('nombreCli').value = '';
+    document.getElementById('telCli').value = '';
+    document.getElementById('deptCli').value = '';
+    document.getElementById('btnCancelarCli').style.display = 'none';
+}
+
+// ==================== PEDIDOS ====================
+function clientePedidoChange() { if (document.getElementById('clientePedido').value) document.getElementById('nuevoClienteNombre').value = ''; }
+function agregarAlCarrito() {
+    let sel = document.getElementById('productoPedido');
+    let opt = sel.options[sel.selectedIndex];
+    let id = sel.value, nombre = opt?.dataset?.nombre, precio = parseFloat(opt?.dataset?.precio) || 0;
+    let cant = parseInt(document.getElementById('cantidadPedido').value);
+    if (!id || !cant || cant < 1) { mostrarToast('⚠️ Selecciona producto y cantidad', 'warning'); return; }
+    let prod = productos.find(p => p.id === id);
+    if (prod && cant > prod.stock) { mostrarToast('⚠️ Stock insuficiente. Disponible: ' + prod.stock, 'error'); return; }
+    let existente = carrito.find(i => i.productoId === id);
+    if (existente) { existente.cantidad += cant; }
+    else { carrito.push({productoId:id, productoNombre:nombre, precio:precio, cantidad:cant, categoria:opt?.dataset?.cat||''}); }
+    document.getElementById('cantidadPedido').value = 1;
+    document.getElementById('productoPedido').value = '';
+    mostrarCarrito(); mostrarToast('🛒 Agregado al carrito');
+}
+function quitarDelCarrito(i) { carrito.splice(i,1); mostrarCarrito(); }
+function vaciarCarrito() { if (carrito.length && confirm('¿Vaciar?')) { carrito = []; mostrarCarrito(); } }
+function mostrarCarrito() {
+    if (!carrito.length) {
+        document.getElementById('carritoLista').innerHTML = '<p style="color:var(--text-light);text-align:center;">Vacío</p>';
+        document.getElementById('totalCarritoUSD').textContent = '$0.00';
+        document.getElementById('totalCarritoVES').textContent = 'Bs 0.00'; return;
+    }
+    let html = '', total = 0;
+    carrito.forEach((item, i) => {
+        let sub = item.precio * item.cantidad; total += sub;
+        html += `<div class="cart-item"><div><strong>${item.productoNombre}</strong> x${item.cantidad}<br><small class="precio-usd">$${sub.toFixed(2)}</small> | <small class="precio-ves">Bs ${(sub*tasaDolar).toFixed(2)}</small></div><button class="btn btn-danger btn-xs" onclick="quitarDelCarrito(${i})">✕</button></div>`;
+    });
+    document.getElementById('carritoLista').innerHTML = html;
+    document.getElementById('totalCarritoUSD').textContent = '$' + total.toFixed(2);
+    document.getElementById('totalCarritoVES').textContent = 'Bs ' + (total * tasaDolar).toFixed(2);
+}
+async function registrarPedido() {
+    let clienteId = document.getElementById('clientePedido').value;
+    let nombreNuevo = document.getElementById('nuevoClienteNombre').value.trim();
+    if (!clienteId && !nombreNuevo) { mostrarToast('⚠️ Selecciona o ingresa un cliente', 'warning'); return; }
+    if (!carrito.length) { mostrarToast('⚠️ Carrito vacío', 'warning'); return; }
+    let cliente;
+    if (clienteId) { cliente = clientes.find(c => c.id === clienteId); }
+    else { await callAPI('guardarCliente', '', nombreNuevo, '', ''); await cargarDatos(); cliente = clientes[clientes.length-1]; }
+    if (!cliente) return;
+    let total = carrito.reduce((s,i) => s + (i.precio*i.cantidad), 0);
+    let pedido = {
+        id: 'PED' + (pedidos.length + 1).toString().padStart(3,'0'),
+        fecha: fechaInputAFormato(document.getElementById('fechaPedido').value),
+        clienteId: cliente.id, clienteNombre: cliente.nombre,
+        items: JSON.parse(JSON.stringify(carrito)), total,
+        totalVES: parseFloat((total * tasaDolar).toFixed(2)), tasaDolar,
+        estado: 'Pendiente', abonado: 0, fechaPago: ''
+    };
+    await callAPI('guardarPedido', JSON.stringify(pedido));
+    carrito = []; mostrarCarrito();
+    document.getElementById('nuevoClienteNombre').value = '';
+    document.getElementById('clientePedido').value = '';
+    await cargarDatos(); cargarTodo();
+    mostrarToast('✅ Pedido registrado: $' + total.toFixed(2) + ' / Bs ' + (total*tasaDolar).toFixed(2));
+}
+
+// ==================== COBRANZA ====================
+function cargarCobranza() {
+    let cId = document.getElementById('selectClienteCobranza').value;
+    if (!cId) { document.getElementById('cobranzaDetalle').innerHTML = ''; return; }
+    let cliente = clientes.find(c => c.id === cId);
+    if (!cliente) return;
+    let peds = pedidos.filter(p => p.clienteId === cId);
+    let pedsPendientes = peds.filter(p => p.estado !== 'Pagado');
+    if (peds.length === 0) { document.getElementById('cobranzaDetalle').innerHTML = '<p style="color:var(--text-light);">Sin pedidos.</p>'; return; }
+    let totalDebe = pedsPendientes.reduce((s, p) => s + (p.total - p.abonado), 0);
+    let totalPedidos = peds.reduce((s, p) => s + p.total, 0);
+    let totalAbonado = peds.reduce((s, p) => s + p.abonado, 0);
+    
+    let html = `
+        <div class="cliente-resumen">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px;">
+                <div><h3 style="color:var(--primary);margin:0;">👤 ${cliente.nombre}</h3><p style="color:var(--text-light);margin:5px 0;">📱 ${cliente.telefono||'Sin teléfono'} | 🏢 ${cliente.departamento||'Sin depto'}</p></div>
+                <div style="text-align:right;">
+                    <p style="margin:0;">Total pedidos: <strong>$${totalPedidos.toFixed(2)}</strong></p>
+                    <p style="margin:0;color:var(--success);">Total abonado: <strong>$${totalAbonado.toFixed(2)}</strong></p>
+                    <p style="margin:5px 0;font-size:1.4em;font-weight:800;color:var(--danger);">Debe: $${totalDebe.toFixed(2)} / Bs ${(totalDebe*tasaDolar).toFixed(2)}</p>
+                    ${totalDebe > 0 ? `<button class="btn btn-success" onclick="abonarDeudaTotal('${cId}')">💵 PAGAR TODO ($ ${totalDebe.toFixed(2)})</button>` : '<span class="badge badge-pagado" style="font-size:1em;">✅ Todo Pagado</span>'}
+                </div>
+            </div>
+        </div>`;
+    
+    if (pedsPendientes.length > 0) {
+        html += '<h4>⚠️ Pedidos Pendientes</h4><table><thead><tr><th>ID</th><th>Fecha</th><th>Productos</th><th>Total</th><th>Abonado</th><th>Restante USD</th><th>Restante Bs</th><th>Estado</th><th>Acción</th></tr></thead><tbody>';
+        pedsPendientes.reverse().forEach(p => {
+            let rest = p.total - p.abonado;
+            let itemsT = p.items.map(i => (i.productoNombre||'') + ' x' + i.cantidad).join(', ');
+            let ec = p.estado === 'Pendiente' ? 'badge-pendiente' : 'badge-abonado';
+            html += `<tr><td><strong>${p.id}</strong></td><td>${p.fecha}</td><td style="font-size:0.75em;">${itemsT}</td><td>$${p.total.toFixed(2)}</td><td style="color:var(--success);">$${p.abonado.toFixed(2)}</td><td style="color:var(--danger);font-weight:bold;">$${rest.toFixed(2)}</td><td style="color:var(--danger);">Bs ${(rest*tasaDolar).toFixed(2)}</td><td><span class="badge ${ec}">${p.estado}</span></td><td><div style="display:flex;gap:4px;"><button class="btn btn-info btn-xs" onclick="abrirModalAbono('${p.id}')">💵 Abonar</button><button class="btn btn-success btn-xs" onclick="pagarPedidoCompleto('${p.id}')">💰 Pagar</button></div></td></tr>`;
+        });
+        html += `<tr style="background:#fff5f5;font-weight:bold;"><td colspan="5" style="text-align:right;">TOTAL PENDIENTE:</td><td style="color:var(--danger);font-size:1.1em;">$${totalDebe.toFixed(2)}</td><td style="color:var(--danger);">Bs ${(totalDebe*tasaDolar).toFixed(2)}</td><td colspan="2"></td></tr></tbody></table>`;
+    }
+    
+    let pedsPagados = peds.filter(p => p.estado === 'Pagado');
+    if (pedsPagados.length > 0) {
+        html += '<h4 style="margin-top:20px;">✅ Pedidos Pagados</h4><table><thead><tr><th>ID</th><th>Fecha</th><th>Productos</th><th>Total</th><th>Fecha Pago</th></tr></thead><tbody>';
+        pedsPagados.reverse().forEach(p => { html += `<tr><td>${p.id}</td><td>${p.fecha}</td><td style="font-size:0.75em;">${p.items.map(i=>i.productoNombre+' x'+i.cantidad).join(', ')}</td><td>$${p.total.toFixed(2)}</td><td>${p.fechaPago||'-'}</td></tr>`; });
+        html += '</tbody></table>';
+    }
+    
+    let abs = abonos.filter(a => peds.some(p => p.id === a.pedidoId));
+    if (abs.length > 0) {
+        html += '<h4 style="margin-top:20px;">💵 Historial de Pagos</h4><table><thead><tr><th>Fecha</th><th>Pedido</th><th>Monto USD</th><th>Monto Bs</th><th>Tasa</th><th>Ref</th><th>Banco</th></tr></thead><tbody>';
+        abs.reverse().forEach(a => { html += `<tr><td>${a.fecha}</td><td>${a.pedidoId}</td><td style="color:var(--success);font-weight:bold;">$${a.montoUSD.toFixed(2)}</td><td style="color:var(--success);">Bs ${(a.montoVES||(a.montoUSD*a.tasaPago)).toFixed(2)}</td><td>Bs ${(a.tasaPago||tasaDolar).toFixed(2)}</td><td>${a.refPago||'-'}</td><td>${a.banco||'-'}</td></tr>`; });
+        html += '</tbody></table>';
+    }
+    document.getElementById('cobranzaDetalle').innerHTML = html;
+}
+
+// ==================== MODALES DE PAGO ====================
+function abrirModalAbono(pedidoId) {
+    let p = pedidos.find(pe => pe.id === pedidoId); if (!p) return;
+    let restante = p.total - p.abonado; if (restante <= 0) { mostrarToast('✅ Ya está pagado'); return; }
+    let itemsT = p.items.map(i => (i.productoNombre||'') + ' x' + i.cantidad).join(', ');
+    let modalHTML = `
+        <div class="modal-overlay active" id="modalAbonoPedido" onclick="if(event.target===this) cerrarModalAbonoPedido()">
+            <div class="modal"><h3>💵 REGISTRAR ABONO</h3>
+                <p><strong>Pedido:</strong> #${p.id} | <strong>Cliente:</strong> ${p.clienteNombre}</p>
+                <p style="font-size:0.85em;">${itemsT}</p>
+                <p>Total: <strong>$${p.total.toFixed(2)}</strong> | Abonado: <strong style="color:var(--success);">$${p.abonado.toFixed(2)}</strong></p>
+                <p style="font-size:1.2em;color:var(--danger);"><strong>Restante: $${restante.toFixed(2)} / Bs ${(restante*tasaDolar).toFixed(2)}</strong></p>
+                <div class="form-group"><label>💰 Monto USD <span class="required">*</span></label><input type="number" id="modalMontoAbono" step="0.01" min="0.01" max="${restante.toFixed(2)}" placeholder="0.00" oninput="calcularBsAbono()"><small>Máx: $${restante.toFixed(2)}</small><div style="margin-top:5px;color:var(--success);font-weight:600;" id="modalMontoAbonoVES">Bs 0.00</div></div>
+                <div class="form-group"><label>📱 Referencia <span class="required">*</span></label><input type="text" id="modalRefAbono" placeholder="Ej: 0123 / 12345678"></div>
+                <div class="form-group"><label>🏦 Banco</label><select id="modalBancoAbono"><option value="">-- Seleccionar --</option><option>Banco de Venezuela</option><option>Banco Mercantil</option><option>Banco Provincial</option><option>Banesco</option><option>Banco del Tesoro</option><option>Bancamiga</option><option>Otro</option></select></div>
+                <div class="form-group"><label>📝 Nota</label><input type="text" id="modalNotaAbono" placeholder="Opcional"></div>
+                <div class="btn-group"><button class="btn btn-success" onclick="confirmarAbono('${pedidoId}', ${restante})">✅ Registrar</button><button class="btn btn-outline" onclick="cerrarModalAbonoPedido()">Cancelar</button></div>
+            </div></div>`;
+    let mc = document.createElement('div'); mc.id = 'modalAbonoPedidoContainer'; mc.innerHTML = modalHTML; document.body.appendChild(mc);
+}
+function cerrarModalAbonoPedido() { let m = document.getElementById('modalAbonoPedidoContainer'); if(m) m.remove(); }
+function calcularBsAbono() { let mt = parseFloat(document.getElementById('modalMontoAbono').value)||0; document.getElementById('modalMontoAbonoVES').textContent = 'Bs '+(mt*tasaDolar).toFixed(2); }
+async function confirmarAbono(pedidoId, restanteMax) {
+    let monto = parseFloat(document.getElementById('modalMontoAbono').value);
+    let ref = document.getElementById('modalRefAbono').value.trim();
+    let banco = document.getElementById('modalBancoAbono').value;
+    let nota = document.getElementById('modalNotaAbono').value.trim();
+    if (isNaN(monto)||monto<=0) { mostrarToast('⚠️ Monto inválido','error'); return; }
+    if (monto>restanteMax) { mostrarToast('⚠️ Excede restante','error'); return; }
+    if (!ref) { mostrarToast('⚠️ Referencia obligatoria','error'); return; }
+    cerrarModalAbonoPedido();
+    let p = pedidos.find(pe=>pe.id===pedidoId); if(!p) return;
+    let abono = {id:'AB'+(abonos.length+1).toString().padStart(3,'0'),fecha:new Date().toLocaleDateString('es-VE'),pedidoId,cliente:p.clienteNombre,montoUSD:monto,montoVES:parseFloat((monto*tasaDolar).toFixed(2)),tasaPago:tasaDolar,refPago:ref,banco,nota:nota||('Ref: '+ref)};
+    await callAPI('guardarAbono', JSON.stringify(abono));
+    await cargarDatos(); cargarTodo();
+    mostrarToast('✅ Abono: $'+monto.toFixed(2)+' | Ref: '+ref);
+}
+
+async function pagarPedidoCompleto(pedidoId) {
+    let p = pedidos.find(pe=>pe.id===pedidoId); if(!p) return;
+    let restante = p.total-p.abonado; if(restante<=0){mostrarToast('✅ Ya pagado');return;}
+    let itemsT = p.items.map(i=>(i.productoNombre||'')+' x'+i.cantidad).join(', ');
+    let modalHTML = `
+        <div class="modal-overlay active" id="modalPagoPedido" onclick="if(event.target===this) cerrarModalPagoPedido()">
+            <div class="modal"><h3>💰 PAGAR PEDIDO COMPLETO</h3>
+                <p><strong>Pedido:</strong> #${p.id} | <strong>Cliente:</strong> ${p.clienteNombre}</p>
+                <p style="font-size:0.85em;">${itemsT}</p>
+                <p style="font-size:1.2em;color:var(--danger);"><strong>Total: $${restante.toFixed(2)} / Bs ${(restante*tasaDolar).toFixed(2)}</strong></p>
+                <div class="form-group"><label>📱 Referencia <span class="required">*</span></label><input type="text" id="modalRefPagoPedido" placeholder="Ej: 0123 / 12345678"></div>
+                <div class="form-group"><label>🏦 Banco</label><select id="modalBancoPedido"><option value="">-- Seleccionar --</option><option>Banco de Venezuela</option><option>Banco Mercantil</option><option>Banco Provincial</option><option>Banesco</option><option>Banco del Tesoro</option><option>Bancamiga</option><option>Otro</option></select></div>
+                <div class="form-group"><label>📝 Nota</label><input type="text" id="modalNotaPedido" placeholder="Opcional"></div>
+                <div class="btn-group"><button class="btn btn-success" onclick="confirmarPagoPedido('${pedidoId}', ${restante})">✅ Confirmar</button><button class="btn btn-outline" onclick="cerrarModalPagoPedido()">Cancelar</button></div>
+            </div></div>`;
+    let mc = document.createElement('div'); mc.id = 'modalPagoPedidoContainer'; mc.innerHTML = modalHTML; document.body.appendChild(mc);
+}
+function cerrarModalPagoPedido() { let m = document.getElementById('modalPagoPedidoContainer'); if(m) m.remove(); }
+async function confirmarPagoPedido(pedidoId, restante) {
+    let ref = document.getElementById('modalRefPagoPedido').value.trim();
+    let banco = document.getElementById('modalBancoPedido').value;
+    let nota = document.getElementById('modalNotaPedido').value.trim();
+    if (!ref) { mostrarToast('⚠️ Referencia obligatoria','error'); return; }
+    cerrarModalPagoPedido();
+    let p = pedidos.find(pe=>pe.id===pedidoId); if(!p) return;
+    let abono = {id:'AB'+(abonos.length+1).toString().padStart(3,'0'),fecha:new Date().toLocaleDateString('es-VE'),pedidoId,cliente:p.clienteNombre,montoUSD:restante,montoVES:parseFloat((restante*tasaDolar).toFixed(2)),tasaPago:tasaDolar,refPago:ref,banco,nota:nota||('Ref: '+ref)};
+    await callAPI('guardarAbono', JSON.stringify(abono));
+    await cargarDatos(); cargarTodo();
+    mostrarToast('✅ Pedido #'+pedidoId+' pagado | Ref: '+ref);
+}
+
+async function abonarDeudaTotal(clienteId) {
+    let cliente = clientes.find(c=>c.id===clienteId); if(!cliente) return;
+    let peds = pedidos.filter(p=>p.clienteId===clienteId && p.estado!=='Pagado');
+    if(!peds.length){mostrarToast('✅ Sin deudas');return;}
+    let totalDebe = peds.reduce((s,p)=>s+(p.total-p.abonado),0);
+    let modalHTML = `
+        <div class="modal-overlay active" id="modalPagoTotal" onclick="if(event.target===this) cerrarModalPagoTotal()">
+            <div class="modal"><h3>💵 PAGO TOTAL</h3>
+                <p><strong>Cliente:</strong> ${cliente.nombre}</p>
+                <p style="font-size:1.2em;color:var(--danger);"><strong>Total: $${totalDebe.toFixed(2)} / Bs ${(totalDebe*tasaDolar).toFixed(2)}</strong></p>
+                <div class="form-group"><label>📱 Referencia <span class="required">*</span></label><input type="text" id="modalRefPagoTotal" placeholder="Ej: 0123 / 12345678"></div>
+                <div class="form-group"><label>🏦 Banco</label><select id="modalBancoTotal"><option value="">-- Seleccionar --</option><option>Banco de Venezuela</option><option>Banco Mercantil</option><option>Banco Provincial</option><option>Banesco</option><option>Banco del Tesoro</option><option>Bancamiga</option><option>Otro</option></select></div>
+                <div class="form-group"><label>📝 Nota</label><input type="text" id="modalNotaTotal" placeholder="Opcional"></div>
+                <p style="font-size:0.85em;">📋 Se pagarán <strong>${peds.length}</strong> pedido(s)</p>
+                <div class="btn-group"><button class="btn btn-success" onclick="confirmarPagoTotal('${clienteId}', ${totalDebe})">✅ Confirmar</button><button class="btn btn-outline" onclick="cerrarModalPagoTotal()">Cancelar</button></div>
+            </div></div>`;
+    let mc = document.createElement('div'); mc.id = 'modalPagoTotalContainer'; mc.innerHTML = modalHTML; document.body.appendChild(mc);
+}
+function cerrarModalPagoTotal() { let m = document.getElementById('modalPagoTotalContainer'); if(m) m.remove(); }
+async function confirmarPagoTotal(clienteId, totalDebe) {
+    let ref = document.getElementById('modalRefPagoTotal').value.trim();
+    let banco = document.getElementById('modalBancoTotal').value;
+    let nota = document.getElementById('modalNotaTotal').value.trim();
+    if (!ref) { mostrarToast('⚠️ Referencia obligatoria','error'); return; }
+    cerrarModalPagoTotal();
+    let peds = pedidos.filter(p=>p.clienteId===clienteId && p.estado!=='Pagado');
+    for (let p of peds) {
+        let restante = p.total-p.abonado;
+        if(restante>0) {
+            let abono = {id:'AB'+(abonos.length+1).toString().padStart(3,'0'),fecha:new Date().toLocaleDateString('es-VE'),pedidoId:p.id,cliente:p.clienteNombre,montoUSD:restante,montoVES:parseFloat((restante*tasaDolar).toFixed(2)),tasaPago:tasaDolar,refPago:ref,banco,nota:nota||('Ref: '+ref)};
+            await callAPI('guardarAbono', JSON.stringify(abono));
+        }
+    }
+    await cargarDatos(); cargarTodo();
+    mostrarToast('✅ Pago total: $'+totalDebe.toFixed(2)+' | Ref: '+ref);
+}
+
+// ==================== INVERSIONES ====================
+function calcInvUSD() {
+    let bs = parseFloat(document.getElementById('montoBsInversion').value)||0;
+    let t = parseFloat(document.getElementById('tasaInversion').value)||tasaDolar;
+    document.getElementById('inversionUSD').textContent = '$'+(bs/t).toFixed(2);
+}
+async function registrarInversion() {
+    let cat = document.getElementById('catInversion').value;
+    let desc = document.getElementById('descInversion').value.trim();
+    let bs = parseFloat(document.getElementById('montoBsInversion').value);
+    let t = parseFloat(document.getElementById('tasaInversion').value)||tasaDolar;
+    if(isNaN(bs)||bs<=0){mostrarToast('⚠️ Monto inválido','warning');return;}
+    let inv = {id:'INV'+(inversiones.length+1).toString().padStart(3,'0'),fecha:fechaInputAFormato(document.getElementById('fechaInversion').value),categoria:cat,descripcion:desc||'Inversión',montoBs:bs,tasaInversion:t,montoUSD:parseFloat((bs/t).toFixed(2))};
+    await callAPI('guardarInversion', JSON.stringify(inv));
+    document.getElementById('descInversion').value=''; document.getElementById('montoBsInversion').value=''; document.getElementById('inversionUSD').textContent='$0.00';
+    await cargarDatos(); cargarTodo();
+    mostrarToast('✅ Inversión: $'+(bs/t).toFixed(2));
+}
+
+// ==================== TASA ====================
+async function guardarTasa() {
+    let val = parseFloat(document.getElementById('tasaDolar').value);
+    if(isNaN(val)||val<=0){document.getElementById('tasaDolar').value=tasaDolar;return;}
+    tasaDolar = val;
+    await callAPI('guardarTasa', tasaDolar);
+    await cargarDatos(); cargarTodo();
+    mostrarToast('✅ Tasa: Bs '+tasaDolar.toFixed(2)+' / USD');
+}
+
+// ==================== CARGAR VISTAS ====================
+function cargarTodo() {
+    document.getElementById('tasaDolar').value = tasaDolar;
+    document.getElementById('tasaInversion').value = tasaDolar;
+    document.getElementById('fechaPedido').value = new Date().toISOString().split('T')[0];
+    document.getElementById('fechaInversion').value = new Date().toISOString().split('T')[0];
+    
+    // Productos
+    let hp = '<table><thead><tr><th>Nombre</th><th>USD</th><th>Bs</th><th>Stock</th><th>Acc</th></tr></thead><tbody>';
+    productos.forEach(p => { hp += `<tr><td><strong>${p.nombre}</strong></td><td class="precio-usd">$${p.precio.toFixed(2)}</td><td class="precio-ves">Bs ${(p.precio*tasaDolar).toFixed(2)}</td><td>${p.stock}</td><td><button class="btn btn-warning btn-xs" onclick="editarProducto('${p.id}')">✏️</button> <button class="btn btn-danger btn-xs" onclick="eliminarProducto('${p.id}')">🗑️</button></td></tr>`; });
+    document.getElementById('tablaProductos').innerHTML = hp + '</tbody></table>';
+    let selProd = document.getElementById('productoPedido'); selProd.innerHTML = '<option value="">-- Seleccionar --</option>';
+    productos.filter(p => p.stock > 0).forEach(p => { selProd.innerHTML += `<option value="${p.id}" data-precio="${p.precio}" data-nombre="${p.nombre}" data-cat="${p.categoria}">${p.nombre} - $${p.precio.toFixed(2)} (${p.stock})</option>`; });
+    
+    // Clientes
+    let hc = '<table><thead><tr><th>Nombre</th><th>Tel</th><th>Depto</th><th>Acc</th></tr></thead><tbody>';
+    clientes.forEach(c => { hc += `<tr><td><strong>${c.nombre}</strong></td><td>${c.telefono}</td><td>${c.departamento}</td><td><button class="btn btn-warning btn-xs" onclick="editarCliente('${c.id}')">✏️</button> <button class="btn btn-danger btn-xs" onclick="eliminarCliente('${c.id}')">🗑️</button></td></tr>`; });
+    document.getElementById('tablaClientes').innerHTML = hc + '</tbody></table>';
+    let selCli = document.getElementById('clientePedido'); selCli.innerHTML = '<option value="">-- Seleccionar --</option>';
+    clientes.forEach(c => { selCli.innerHTML += `<option value="${c.id}">${c.nombre}</option>`; });
+    let selCob = document.getElementById('selectClienteCobranza'); selCob.innerHTML = '<option value="">-- Seleccionar --</option>';
+    clientes.forEach(c => { selCob.innerHTML += `<option value="${c.id}">${c.nombre}</option>`; });
+    
+    // Historial
+    let hh = '<table><thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total USD</th><th>Total Bs</th><th>Abonado</th><th>Restante</th><th>Estado</th></tr></thead><tbody>';
+    [...pedidos].reverse().forEach(p => {
+        let rest = p.total - p.abonado;
+        let itemsT = p.items.map(i => (i.productoNombre||'')+' x'+i.cantidad).join(', ');
+        let ec = p.estado==='Pendiente'?'badge-pendiente':(p.estado==='Abonado'?'badge-abonado':'badge-pagado');
+        hh += `<tr><td><strong>${p.id}</strong></td><td>${p.fecha}</td><td>${p.clienteNombre}</td><td style="max-width:150px;font-size:0.75em;">${itemsT}</td><td class="precio-usd">$${p.total.toFixed(2)}</td><td class="precio-ves">Bs ${(p.totalVES||(p.total*p.tasaDolar)).toFixed(2)}</td><td style="color:var(--success);">$${p.abonado.toFixed(2)}</td><td style="color:var(--danger);">$${rest.toFixed(2)}</td><td><span class="badge ${ec}">${p.estado}</span></td></tr>`;
+    });
+    document.getElementById('tablaHistorial').innerHTML = hh + '</tbody></table>';
+    
+    // Inversiones
+    let hi = '<table><thead><tr><th>Fecha</th><th>Cat</th><th>Desc</th><th>Bs</th><th>USD</th></tr></thead><tbody>';
+    [...inversiones].reverse().forEach(i => { hi += `<tr><td>${i.fecha}</td><td>${i.categoria}</td><td>${i.descripcion}</td><td>Bs ${i.montoBs.toFixed(2)}</td><td class="precio-usd">$${i.montoUSD.toFixed(2)}</td></tr>`; });
+    document.getElementById('tablaInversiones').innerHTML = hi + '</tbody></table>';
+    
+    // Dashboard con 5 tarjetas
+    let tV = pedidos.reduce((s,p) => s + p.total, 0);
+    let tVBs = pedidos.reduce((s,p) => s + (p.totalVES||(p.total*p.tasaDolar)), 0);
+    let tP = pedidos.filter(p => p.estado !== 'Pagado').reduce((s,p) => s + (p.total-p.abonado), 0);
+    let tPBs = tP * tasaDolar;
+    let tC = pedidos.reduce((s,p) => s + p.abonado, 0);
+    let tI = inversiones.reduce((s,i) => s + i.montoUSD, 0);
+    let gan = tC - tI;
+    let totalAbonos = abonos.reduce((s,a) => s + a.montoUSD, 0);
+    let totalAbonosBs = abonos.reduce((s,a) => s + (a.montoVES||(a.montoUSD*a.tasaPago)||(a.montoUSD*tasaDolar)), 0);
+    
+    document.getElementById('statsCards').innerHTML = `
+        <div class="stats-card"><div class="stat-label">💰 Ventas Totales</div><div class="stat-value">$${tV.toFixed(0)}</div><div class="stat-value-sm">Bs ${tVBs.toFixed(0)}</div></div>
+        <div class="stats-card"><div class="stat-label">💵 Pagos Recibidos</div><div class="stat-value" style="color:var(--success);">$${totalAbonos.toFixed(0)}</div><div class="stat-value-sm">Bs ${totalAbonosBs.toFixed(0)}</div></div>
+        <div class="stats-card"><div class="stat-label">⚠️ Por Cobrar</div><div class="stat-value" style="color:var(--danger);">$${tP.toFixed(0)}</div><div class="stat-value-sm">Bs ${tPBs.toFixed(0)}</div></div>
+        <div class="stats-card"><div class="stat-label">💸 Invertido</div><div class="stat-value" style="color:var(--warning);">$${tI.toFixed(0)}</div></div>
+        <div class="stats-card"><div class="stat-label">📈 Ganancia</div><div class="stat-value" style="color:${gan>=0?'var(--success)':'var(--danger)'};">$${gan.toFixed(0)}</div><div class="stat-value-sm">Bs ${(gan*tasaDolar).toFixed(0)}</div></div>`;
+    
+    // Últimos pedidos
+    let u = [...pedidos].reverse().slice(0,5);
+    let hu = '<table><thead><tr><th>ID</th><th>Cliente</th><th>Total</th><th>Estado</th></tr></thead><tbody>';
+    u.forEach(p => { let ec = p.estado==='Pendiente'?'badge-pendiente':(p.estado==='Abonado'?'badge-abonado':'badge-pagado'); hu += `<tr><td>${p.id}</td><td>${p.clienteNombre}</td><td>$${p.total.toFixed(2)} <small class="precio-ves">Bs ${(p.totalVES||(p.total*p.tasaDolar)).toFixed(2)}</small></td><td><span class="badge ${ec}">${p.estado}</span></td></tr>`; });
+    document.getElementById('ultimosPedidos').innerHTML = hu + '</tbody></table>';
+    
+    // Deudas
+    let d = pedidos.filter(p => p.estado !== 'Pagado').sort((a,b)=>(b.total-b.abonado)-(a.total-a.abonado)).slice(0,5);
+    let hd = '<table><thead><tr><th>Cliente</th><th>Debe USD</th><th>Debe Bs</th></tr></thead><tbody>';
+    d.forEach(p => { hd += `<tr><td>${p.clienteNombre}</td><td style="color:var(--danger);font-weight:bold;">$${(p.total-p.abonado).toFixed(2)}</td><td style="color:var(--danger);">Bs ${((p.total-p.abonado)*tasaDolar).toFixed(2)}</td></tr>`; });
+    document.getElementById('deudasPendientes').innerHTML = hd + '</tbody></table>';
+    
+    // Ganancias
+    let vCat = {}, iCat = {};
+    pedidos.forEach(p => { p.items.forEach(item => { let cat = item.categoria || 'Otros'; if (!vCat[cat]) vCat[cat] = 0; vCat[cat] += item.precio * item.cantidad; }); });
+    inversiones.forEach(i => { if (!iCat[i.categoria]) iCat[i.categoria] = 0; iCat[i.categoria] += i.montoUSD; });
+    let cats = new Set([...Object.keys(vCat), ...Object.keys(iCat)]);
+    let hg = '', hgd = '<table><thead><tr><th>Cat</th><th>Inv USD</th><th>Ventas USD</th><th>Gan USD</th><th>Gan Bs</th></tr></thead><tbody>';
+    cats.forEach(cat => { let v = vCat[cat]||0, inv = iCat[cat]||0, g = v - inv; hg += `<div class="stats-card" style="border-top-color:${g>=0?'var(--success)':'var(--danger)'};"><div class="stat-label">📌 ${cat}</div><div class="stat-value" style="color:${g>=0?'var(--success)':'var(--danger)'};">$${g.toFixed(0)}</div><div class="stat-value-sm">Bs ${(g*tasaDolar).toFixed(0)}</div></div>`; hgd += `<tr><td><strong>${cat}</strong></td><td>$${inv.toFixed(2)}</td><td>$${v.toFixed(2)}</td><td style="font-weight:bold;color:${g>=0?'var(--success)':'var(--danger)'};">$${g.toFixed(2)}</td><td style="color:${g>=0?'var(--success)':'var(--danger)'};">Bs ${(g*tasaDolar).toFixed(2)}</td></tr>`; });
+    document.getElementById('gananciasCategorias').innerHTML = hg || '<p style="color:var(--text-light);">Sin datos</p>';
+    document.getElementById('detalleGanancias').innerHTML = hgd + '</tbody></table>';
+    
+    mostrarCarrito();
+    actualizarFechaHora();
+}
+
+async function iniciarApp() {
+    await cargarDatos();
+    cargarTodo();
+    setInterval(actualizarFechaHora, 60000);
+}
+</script>
+</body>
+</html>
