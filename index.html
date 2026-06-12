@@ -502,8 +502,111 @@ function vaciarCarrito() { if(carrito.length&&confirm('¿Vaciar?')){carrito=[];m
 function mostrarCarrito() { if(!carrito.length){document.getElementById('carritoLista').innerHTML='<p style="color:var(--text-light);text-align:center;">Vacío</p>';document.getElementById('totalCarritoUSD').textContent='$0.00';document.getElementById('totalCarritoVES').textContent='Bs 0.00';return;} let html='',total=0; carrito.forEach((item,i)=>{let sub=item.precio*item.cantidad;total+=sub;html+=`<div class="cart-item"><div><strong>${item.productoNombre}</strong> x${item.cantidad}<br><small class="precio-usd">$${sub.toFixed(2)}</small> | <small class="precio-ves">Bs ${(sub*tasaDolar).toFixed(2)}</small></div><button class="btn btn-danger btn-xs" onclick="quitarDelCarrito(${i})">✕</button></div>`;}); document.getElementById('carritoLista').innerHTML=html; document.getElementById('totalCarritoUSD').textContent='$'+total.toFixed(2); document.getElementById('totalCarritoVES').textContent='Bs '+(total*tasaDolar).toFixed(2); }
 async function registrarPedido() { let clienteId=document.getElementById('clientePedido').value, nombreNuevo=document.getElementById('nuevoClienteNombre').value.trim(); if(!clienteId&&!nombreNuevo){mostrarToast('⚠️ Selecciona o ingresa un cliente','warning');return;} if(!carrito.length){mostrarToast('⚠️ Carrito vacío','warning');return;} let cliente; if(clienteId){cliente=clientes.find(c=>c.id===clienteId);}else{await callAPI('guardarCliente','',nombreNuevo,'','');await cargarDatos();cliente=clientes[clientes.length-1];} if(!cliente)return; let total=carrito.reduce((s,i)=>s+(i.precio*i.cantidad),0); let pedido={id:'PED'+(pedidos.length+1).toString().padStart(3,'0'),fecha:fechaInputAFormato(document.getElementById('fechaPedido').value),clienteId:cliente.id,clienteNombre:cliente.nombre,items:JSON.parse(JSON.stringify(carrito)),total,totalVES:parseFloat((total*tasaDolar).toFixed(2)),tasaDolar,estado:'Pendiente',abonado:0,fechaPago:''}; await callAPI('guardarPedido',JSON.stringify(pedido)); carrito=[];mostrarCarrito();document.getElementById('nuevoClienteNombre').value='';document.getElementById('clientePedido').value='';await cargarDatos();cargarTodo();mostrarToast('✅ Pedido registrado: $'+total.toFixed(2)); }
 
-// ==================== COBRANZA ====================
-function cargarCobranza() { let cId=document.getElementById('selectClienteCobranza').value; if(!cId){document.getElementById('cobranzaDetalle').innerHTML='';return;} let cliente=clientes.find(c=>c.id===cId); if(!cliente)return; let peds=pedidos.filter(p=>p.clienteId===cId), pedsPendientes=peds.filter(p=>p.estado!=='Pagado'); if(peds.length===0){document.getElementById('cobranzaDetalle').innerHTML='<p>Sin pedidos.</p>';return;} let totalDebe=pedsPendientes.reduce((s,p)=>s+(p.total-p.abonado),0); let html=`<div class="cliente-resumen"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:15px;"><div><h3>👤 ${cliente.nombre}</h3><p>📱 ${cliente.telefono||'-'}</p></div><div style="text-align:right;"><p>Debe: <span style="font-size:1.4em;font-weight:800;color:var(--danger);">$${totalDebe.toFixed(2)} / Bs ${(totalDebe*tasaDolar).toFixed(2)}</span></p>${totalDebe>0?`<button class="btn btn-success" onclick="abonarDeudaTotal('${cId}')">💵 PAGAR TODO</button>`:'<span class="badge badge-pagado">✅ Todo Pagado</span>'}</div></div></div>`; if(pedsPendientes.length>0){html+='<table><thead><tr><th>ID</th><th>Fecha</th><th>Total</th><th>Abonado</th><th>Restante</th><th>Acción</th></tr></thead><tbody>';pedsPendientes.forEach(p=>{let rest=p.total-p.abonado;html+=`<tr><td>${p.id}</td><td>${p.fecha}</td><td>$${p.total.toFixed(2)}</td><td>$${p.abonado.toFixed(2)}</td><td style="color:var(--danger);">$${rest.toFixed(2)}</td><td><button class="btn btn-info btn-xs" onclick="abrirModalAbono('${p.id}')">💵</button> <button class="btn btn-success btn-xs" onclick="pagarPedidoCompleto('${p.id}')">💰</button></td></tr>`;});html+='</tbody></table>';} document.getElementById('cobranzaDetalle').innerHTML=html; }
+// ==================== COBRANZA COMPLETA ====================
+function cargarCobranza() {
+    let cId = document.getElementById('selectClienteCobranza').value;
+    if (!cId) { document.getElementById('cobranzaDetalle').innerHTML = ''; return; }
+    
+    let cliente = clientes.find(c => c.id === cId);
+    if (!cliente) return;
+    
+    let peds = pedidos.filter(p => p.clienteId === cId);
+    let pedsPendientes = peds.filter(p => p.estado !== 'Pagado');
+    
+    if (peds.length === 0) {
+        document.getElementById('cobranzaDetalle').innerHTML = '<p style="color:var(--text-light);">Este cliente no tiene pedidos.</p>';
+        return;
+    }
+    
+    let totalDebe = pedsPendientes.reduce((s, p) => s + (p.total - p.abonado), 0);
+    let totalPedidos = peds.reduce((s, p) => s + p.total, 0);
+    let totalAbonado = peds.reduce((s, p) => s + p.abonado, 0);
+    
+    let html = `
+        <div class="cliente-resumen">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px;">
+                <div>
+                    <h3 style="color:var(--primary);margin:0;">👤 ${cliente.nombre}</h3>
+                    <p style="color:var(--text-light);margin:5px 0;">📱 ${cliente.telefono || 'Sin teléfono'} | 🏢 ${cliente.departamento || 'Sin depto'}</p>
+                </div>
+                <div style="text-align:right;">
+                    <p style="margin:0;">Total pedidos: <strong>$${totalPedidos.toFixed(2)}</strong></p>
+                    <p style="margin:0;color:var(--success);">Total abonado: <strong>$${totalAbonado.toFixed(2)}</strong></p>
+                    <p style="margin:5px 0;font-size:1.4em;font-weight:800;color:var(--danger);">Debe: $${totalDebe.toFixed(2)} / Bs ${(totalDebe*tasaDolar).toFixed(2)}</p>
+                    ${totalDebe > 0 ? `<button class="btn btn-success" onclick="abonarDeudaTotal('${cId}')">💵 PAGAR TODO ($ ${totalDebe.toFixed(2)})</button>` : '<span class="badge badge-pagado" style="font-size:1em;">✅ Todo Pagado</span>'}
+                </div>
+            </div>
+        </div>`;
+    
+    // ===== PEDIDOS PENDIENTES =====
+    if (pedsPendientes.length > 0) {
+        html += '<h4 style="margin-bottom:10px;">⚠️ Pedidos Pendientes</h4>';
+        html += '<table><thead><tr><th>ID</th><th>Fecha</th><th>Productos</th><th>Total</th><th>Abonado</th><th>Restante USD</th><th>Restante Bs</th><th>Estado</th><th>Acción</th></tr></thead><tbody>';
+        
+        pedsPendientes.reverse().forEach(p => {
+            let rest = p.total - p.abonado;
+            let itemsT = p.items.map(i => (i.productoNombre||'') + ' x' + i.cantidad).join(', ');
+            let ec = p.estado === 'Pendiente' ? 'badge-pendiente' : 'badge-abonado';
+            
+            html += `<tr>
+                <td><strong>${p.id}</strong></td>
+                <td>${p.fecha}</td>
+                <td style="font-size:0.75em;max-width:150px;">${itemsT}</td>
+                <td>$${p.total.toFixed(2)}</td>
+                <td style="color:var(--success);">$${p.abonado.toFixed(2)}</td>
+                <td style="color:var(--danger);font-weight:bold;">$${rest.toFixed(2)}</td>
+                <td style="color:var(--danger);">Bs ${(rest*tasaDolar).toFixed(2)}</td>
+                <td><span class="badge ${ec}">${p.estado}</span></td>
+                <td>
+                    <div style="display:flex;gap:4px;">
+                        <button class="btn btn-info btn-xs" onclick="abrirModalAbono('${p.id}')">💵 Abonar</button>
+                        <button class="btn btn-success btn-xs" onclick="pagarPedidoCompleto('${p.id}')">💰 Pagar</button>
+                    </div>
+                </td>
+            </tr>`;
+        });
+        
+        html += `<tr style="background:#fff5f5;font-weight:bold;">
+            <td colspan="5" style="text-align:right;">TOTAL PENDIENTE:</td>
+            <td style="color:var(--danger);font-size:1.1em;">$${totalDebe.toFixed(2)}</td>
+            <td style="color:var(--danger);">Bs ${(totalDebe*tasaDolar).toFixed(2)}</td>
+            <td colspan="2"></td>
+        </tr></tbody></table>`;
+    }
+    
+    // ===== PEDIDOS PAGADOS =====
+    let pedsPagados = peds.filter(p => p.estado === 'Pagado');
+    if (pedsPagados.length > 0) {
+        html += '<h4 style="margin-top:20px;">✅ Pedidos Pagados</h4>';
+        html += '<table><thead><tr><th>ID</th><th>Fecha</th><th>Productos</th><th>Total</th><th>Fecha Pago</th></tr></thead><tbody>';
+        pedsPagados.reverse().forEach(p => {
+            let itemsT = p.items.map(i => (i.productoNombre||'') + ' x' + i.cantidad).join(', ');
+            html += `<tr><td>${p.id}</td><td>${p.fecha}</td><td style="font-size:0.75em;">${itemsT}</td><td>$${p.total.toFixed(2)}</td><td>${p.fechaPago || '-'}</td></tr>`;
+        });
+        html += '</tbody></table>';
+    }
+    
+    // ===== HISTORIAL DE PAGOS (ABONOS) =====
+    let abs = abonos.filter(a => peds.some(p => p.id === a.pedidoId));
+    if (abs.length > 0) {
+        html += '<h4 style="margin-top:20px;">💵 Historial de Pagos</h4>';
+        html += '<table><thead><tr><th>Fecha</th><th>Pedido</th><th>Monto USD</th><th>Monto Bs</th><th>Tasa</th><th>Referencia</th><th>Banco</th></tr></thead><tbody>';
+        abs.reverse().forEach(a => {
+            html += `<tr>
+                <td>${a.fecha}</td>
+                <td>${a.pedidoId}</td>
+                <td style="color:var(--success);font-weight:bold;">$${a.montoUSD.toFixed(2)}</td>
+                <td style="color:var(--success);">Bs ${(a.montoVES||(a.montoUSD*a.tasaPago)).toFixed(2)}</td>
+                <td>Bs ${(a.tasaPago||tasaDolar).toFixed(2)}</td>
+                <td>${a.refPago || '-'}</td>
+                <td>${a.banco || '-'}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+    }
+    
+    document.getElementById('cobranzaDetalle').innerHTML = html;
+}
 
 // ==================== MODALES DE PAGO (COMPLETOS) ====================
 function abrirModalAbono(pedidoId) { let p=pedidos.find(pe=>pe.id===pedidoId); if(!p)return; let restante=p.total-p.abonado; if(restante<=0){mostrarToast('✅ Ya pagado');return;} let itemsT=p.items.map(i=>(i.productoNombre||'')+' x'+i.cantidad).join(', '); let modalHTML=`<div class="modal-overlay active" id="modalAbonoPedido" onclick="if(event.target===this) cerrarModalAbonoPedido()"><div class="modal"><h3>💵 REGISTRAR ABONO</h3><p><strong>Pedido:</strong> #${p.id} | <strong>Cliente:</strong> ${p.clienteNombre}</p><p style="font-size:0.85em;color:var(--text-light);">${itemsT}</p><p>Total: <strong>$${p.total.toFixed(2)}</strong> | Abonado: <strong style="color:var(--success);">$${p.abonado.toFixed(2)}</strong></p><p style="font-size:1.2em;color:var(--danger);"><strong>Restante: $${restante.toFixed(2)} / Bs ${(restante*tasaDolar).toFixed(2)}</strong></p><div class="form-group"><label>💰 Monto a Abonar (USD) <span class="required">*</span></label><input type="number" id="modalMontoAbono" step="0.01" min="0.01" max="${restante.toFixed(2)}" placeholder="0.00" oninput="calcularBsAbono()"><small>Máx: $${restante.toFixed(2)}</small><div style="margin-top:5px;color:var(--success);font-weight:600;" id="modalMontoAbonoVES">Bs 0.00</div></div><div class="form-group"><label>📱 Referencia Pago Móvil <span class="required">*</span></label><input type="text" id="modalRefAbono" placeholder="Ej: 0123 / 12345678"></div><div class="form-group"><label>🏦 Banco</label><select id="modalBancoAbono"><option value="">-- Seleccionar --</option><option>Banco de Venezuela</option><option>Banco Mercantil</option><option>Banco Provincial</option><option>Banesco</option><option>Banco del Tesoro</option><option>Bancamiga</option><option>Otro</option></select></div><div class="form-group"><label>📝 Nota</label><input type="text" id="modalNotaAbono" placeholder="Opcional"></div><div class="btn-group"><button class="btn btn-success" onclick="confirmarAbono('${pedidoId}',${restante})">✅ Registrar</button><button class="btn btn-outline" onclick="cerrarModalAbonoPedido()">Cancelar</button></div></div></div>`; let mc=document.createElement('div');mc.id='modalAbonoPedidoContainer';mc.innerHTML=modalHTML;document.body.appendChild(mc); }
