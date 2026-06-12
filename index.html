@@ -8,6 +8,7 @@
     <meta name="theme-color" content="#1e3a5f">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         :root {
             --primary: #1e3a5f; --primary-light: #2c5282; --accent: #c9a84c;
@@ -112,9 +113,29 @@
         .modal h3 { color: var(--primary); margin-bottom: 15px; font-size: 1.1em; border-bottom: 2px solid var(--accent); padding-bottom: 10px; }
         
         .install-banner { display: none; position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #1a1a1a; padding: 10px 20px; border-radius: 25px; font-weight: 700; cursor: pointer; z-index: 150; box-shadow: 0 10px 30px rgba(0,0,0,0.3); white-space: nowrap; font-size: 0.9em; }
+        .btn-tema { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: white; padding: 5px 8px; border-radius: 8px; cursor: pointer; font-size: 1em; }
         
         .footer-signature { position: fixed; bottom: 10px; left: 15px; font-size: 0.7em; color: var(--text-light); opacity: 0.7; pointer-events: none; z-index: 50; }
         .footer-signature span { color: var(--accent); font-weight: 700; }
+        
+        /* Modo oscuro */
+        body.dark { --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --text-light: #94a3b8; --border: #334155; --shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        body.dark .card { background: #1e293b; }
+        body.dark table th { background: #334155; color: #e2e8f0; }
+        body.dark table td { border-color: #334155; }
+        body.dark table tr:hover td { background: #293548; }
+        body.dark .nav { background: #1e293b; }
+        body.dark .nav button { color: #94a3b8; }
+        body.dark .nav button.active { color: var(--accent); background: #293548; }
+        body.dark .nav-container { background: #1e293b; }
+        body.dark input, body.dark select, body.dark textarea { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+        body.dark .cart-item { background: #293548; }
+        body.dark .cliente-resumen { background: #1a2744; border-color: #2c5282; }
+        body.dark .stats-card { background: #1e293b; }
+        body.dark .modal { background: #1e293b; }
+        body.dark .modal h3 { color: #e2e8f0; }
+        body.dark .header { background: linear-gradient(135deg, #0f1f38, #1e3a5f); }
+        body.dark .top-bar { background: #0a1628; }
         
         @media (max-width: 900px) { .grid-5 { grid-template-columns: repeat(3, 1fr); } }
         @media (max-width: 768px) { .grid-2, .grid-3, .grid-5 { grid-template-columns: 1fr; } .top-bar { font-size: 0.72em; } table { font-size: 0.7em; } .nav button { padding: 8px 10px; font-size: 0.7em; } }
@@ -153,7 +174,9 @@
         <label style="color:white;">💲 Tasa:</label>
         <input type="number" id="tasaDolar" step="0.01">
         <button onclick="guardarTasa()">Actualizar</button>
+        <input type="text" id="buscadorGlobal" placeholder="🔍 Buscar..." style="width:130px;padding:5px 10px;border-radius:15px;border:none;font-size:0.85em;" oninput="buscarGlobal(this.value)">
         <span id="fechaHora" style="font-size:0.75em;"></span>
+        <button class="btn-tema" onclick="toggleTema()" title="Modo oscuro">🌙</button>
         <button onclick="mostrarCambiarPasswordDesdeApp()" style="background:var(--warning);">⚙️</button>
         <button onclick="cerrarSesion()" style="background:var(--danger);color:white;">🚪</button>
     </div>
@@ -169,6 +192,7 @@
     <button onclick="cambiarModulo('historial')">📋 Historial</button>
     <button onclick="cambiarModulo('cobranza')">💰 Cobranza</button>
     <button onclick="cambiarModulo('inversiones')">💸 Inversiones</button>
+    <button onclick="cambiarModulo('socios')">👥 Socios</button>
     <button onclick="cambiarModulo('ganancias')">📈 Ganancias</button>
 </div>
 
@@ -177,6 +201,10 @@
 <!-- ========== INICIO ========== -->
 <div id="modulo-inicio" class="module active">
     <div class="grid-5" id="statsCards"></div>
+    <div class="grid-2" style="margin-top:20px;">
+        <div class="card"><div class="card-header">📊 Ventas por Mes (USD)</div><canvas id="graficoVentas" height="200"></canvas></div>
+        <div class="card"><div class="card-header">🥧 Ventas por Categoría</div><canvas id="graficoCategorias" height="200"></canvas></div>
+    </div>
     <div class="grid-2" style="margin-top:15px;">
         <div class="card"><div class="card-header">🕐 Últimos Pedidos</div><div id="ultimosPedidos" style="overflow-x:auto;"></div></div>
         <div class="card"><div class="card-header">⚠️ Deudas Pendientes</div><div id="deudasPendientes" style="overflow-x:auto;"></div></div>
@@ -262,76 +290,102 @@
     <div class="grid-2">
         <div class="card">
             <div class="card-header">💸 Registrar Inversión</div>
+            <input type="hidden" id="editandoInversionIndex" value="">
             <div class="form-group"><label>📅 Fecha</label><input type="date" id="fechaInversion"></div>
             <div class="form-group"><label>Categoría</label><select id="catInversion"><option>Galletas</option><option>Helados</option><option>Tortas</option><option>Bebidas</option><option>Snacks</option><option>Otros</option></select></div>
             <div class="form-group"><label>Descripción</label><input type="text" id="descInversion" placeholder="Ej: 200 galletas"></div>
             <div class="form-group"><label>Monto Bs <span class="required">*</span></label><input type="number" id="montoBsInversion" step="0.01" placeholder="0.00" oninput="calcInvUSD()"></div>
             <div class="form-group"><label>Tasa del día</label><input type="number" id="tasaInversion" step="0.01" oninput="calcInvUSD()"></div>
+            <div class="form-group"><label>👤 Socio que invirtió</label><select id="socioInversion"><option value="">-- Seleccionar --</option></select></div>
             <div style="margin-bottom:10px;">Equiv USD: <strong class="precio-usd" id="inversionUSD">$0.00</strong></div>
-            <button class="btn btn-accent btn-block" onclick="registrarInversion()">💸 Registrar</button>
+            <div class="btn-group">
+                <button class="btn btn-accent btn-block" id="btnGuardarInversion" onclick="guardarInversion()">💸 Registrar</button>
+                <button class="btn btn-warning" id="btnCancelarInversion" style="display:none;" onclick="cancelarEdicionInversion()">❌ Cancelar</button>
+            </div>
         </div>
         <div class="card"><div class="card-header">📋 Historial Inversiones</div><div id="tablaInversiones" style="overflow-x:auto;"></div></div>
+    </div>
+</div>
+
+<!-- ========== SOCIOS ========== -->
+<div id="modulo-socios" class="module">
+    <div class="grid-2">
+        <div class="card">
+            <div class="card-header">➕ Agregar Socio</div>
+            <input type="hidden" id="editandoSocioId">
+            <div class="form-group"><label>Nombre <span class="required">*</span></label><input type="text" id="nombreSocio" placeholder="Ej: Rony Pérez"></div>
+            <div class="form-group"><label>Porcentaje (%) <span class="required">*</span></label><input type="number" id="porcentajeSocio" min="0" max="100" placeholder="50"></div>
+            <div class="form-group"><label>Teléfono</label><input type="text" id="telefonoSocio" placeholder="0412-1234567"></div>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="guardarSocio()">✅ Guardar</button>
+                <button class="btn btn-warning" id="btnCancelarSocio" style="display:none;" onclick="cancelarEdicionSocio()">Cancelar</button>
+            </div>
+        </div>
+        <div class="card"><div class="card-header">👥 Socios</div><div id="tablaSocios" style="overflow-x:auto;"></div></div>
     </div>
 </div>
 
 <!-- ========== GANANCIAS ========== -->
 <div id="modulo-ganancias" class="module">
     <div class="card"><div class="card-header">📈 Ganancias por Categoría</div><div class="grid-3" id="gananciasCategorias"></div><div id="detalleGanancias" style="margin-top:15px;overflow-x:auto;"></div></div>
+    <div class="card" style="margin-top:15px;">
+        <div class="card-header">👥 Ganancia por Socio</div>
+        <div class="grid-3" id="gananciaSocios"></div>
+    </div>
 </div>
 
 </div>
 
-<!-- BOTÓN INSTALAR APP -->
 <div class="install-banner" id="installBanner" onclick="instalarApp()">📱 Instalar como App</div>
-
 <div class="footer-signature">Desarrollado por <span>Rony Pérez</span> © 2026</div>
 <div class="toast-container" id="toastContainer"></div>
 </div>
 
 <script>
 // ⚠️ PEGA AQUÍ LA URL DE TU GOOGLE APPS SCRIPT
-const API_URL = 'https://script.google.com/macros/s/AKfycby8Mq2sHSfdWrJyEuNAjglLI-NZo1D5eDV9emEmaMrA6OtByip_jsAvgFY0AcLn94ga/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwytGL-Wm32Upt5DccZgjh0KG7i4B1WaYEclJCE2UrD72BwngRsZRaV8QqPkKZSIsWo/exec';
 
 let tasaDolar = 45, password = 'admin2026';
-let productos = [], clientes = [], pedidos = [], abonos = [], inversiones = [];
+let productos = [], clientes = [], pedidos = [], abonos = [], inversiones = [], socios = [];
 let carrito = [];
 let deferredPrompt;
+let graficoVentasInstance = null, graficoCategoriasInstance = null;
 
-// ==================== PWA - INSTALAR COMO APP ====================
+// ==================== PWA ====================
 window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
+    e.preventDefault(); deferredPrompt = e;
     document.getElementById('installBanner').style.display = 'block';
 });
-
 function instalarApp() {
     if (deferredPrompt) {
         deferredPrompt.prompt();
-        deferredPrompt.userChoice.then((choiceResult) => {
-            if (choiceResult.outcome === 'accepted') {
-                mostrarToast('✅ App instalada correctamente');
-            }
-            deferredPrompt = null;
-            document.getElementById('installBanner').style.display = 'none';
+        deferredPrompt.userChoice.then((r) => {
+            if (r.outcome === 'accepted') mostrarToast('✅ App instalada');
+            deferredPrompt = null; document.getElementById('installBanner').style.display = 'none';
         });
     }
 }
-
 window.addEventListener('appinstalled', () => {
     document.getElementById('installBanner').style.display = 'none';
-    mostrarToast('✅ App instalada');
 });
 
-// ==================== SERVICE WORKER ====================
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
+    window.addEventListener('load', () => {
         navigator.serviceWorker.register('data:application/javascript,' + encodeURIComponent(
-            "const CACHE_NAME='ventaspro-v1';" +
-            "self.addEventListener('install',function(e){e.waitUntil(caches.open(CACHE_NAME));self.skipWaiting();});" +
-            "self.addEventListener('activate',function(e){e.waitUntil(clients.claim());});" +
-            "self.addEventListener('fetch',function(e){e.respondWith(fetch(e.request).catch(function(){return caches.match(e.request);}));});"
-        )).catch(function(err) { console.log('SW:', err); });
+            "const CACHE_NAME='ventaspro-v2';self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE_NAME));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(clients.claim());});self.addEventListener('fetch',e=>{e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)));});"
+        )).catch(() => {});
     });
+}
+
+// ==================== MODO OSCURO ====================
+function toggleTema() {
+    document.body.classList.toggle('dark');
+    let btn = document.querySelector('.btn-tema');
+    btn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+    localStorage.setItem('tema', document.body.classList.contains('dark') ? 'dark' : 'light');
+}
+if (localStorage.getItem('tema') === 'dark') {
+    document.body.classList.add('dark');
 }
 
 // ==================== API ====================
@@ -360,27 +414,24 @@ async function cargarDatos() {
         productos = (data.productos||[]).map(p => ({id:p[0],nombre:p[1],categoria:p[2],precio:parseFloat(p[3]||0),stock:parseInt(p[4]||0),stockMinimo:parseInt(p[5]||5)}));
         clientes = (data.clientes||[]).map(c => ({id:c[0],nombre:c[1],telefono:c[2]||'',departamento:c[3]||''}));
         pedidos = (data.pedidos||[]).map(p => {
-            let items = [];
-            try { items = JSON.parse(p[4]||'[]'); } catch(e) {}
-            return {id:p[0],fecha:p[1],clienteId:p[2],clienteNombre:p[3],items:items,total:parseFloat(p[5]||0),totalVES:parseFloat(p[6]||0),tasaDolar:parseFloat(p[7]||tasaDolar),estado:p[8]||'Pendiente',abonado:parseFloat(p[9]||0),fechaPago:p[10]||''};
+            let items = []; try { items = JSON.parse(p[4]||'[]'); } catch(e) {}
+            return {id:p[0],fecha:p[1],clienteId:p[2],clienteNombre:p[3],items,total:parseFloat(p[5]||0),totalVES:parseFloat(p[6]||0),tasaDolar:parseFloat(p[7]||tasaDolar),estado:p[8]||'Pendiente',abonado:parseFloat(p[9]||0),fechaPago:p[10]||''};
         });
         abonos = (data.abonos||[]).map(a => ({id:a[0],fecha:a[1],pedidoId:a[2],cliente:a[3],montoUSD:parseFloat(a[4]||0),montoVES:parseFloat(a[5]||0),tasaPago:parseFloat(a[6]||tasaDolar),refPago:a[7]||'',banco:a[8]||'',nota:a[9]||''}));
-        inversiones = (data.inversiones||[]).map(i => ({id:i[0],fecha:i[1],categoria:i[2],descripcion:i[3]||'',montoBs:parseFloat(i[4]||0),tasaInversion:parseFloat(i[5]||tasaDolar),montoUSD:parseFloat(i[6]||0)}));
+        inversiones = (data.inversiones||[]).map(i => ({id:i[0],fecha:i[1],categoria:i[2],descripcion:i[3]||'',montoBs:parseFloat(i[4]||0),tasaInversion:parseFloat(i[5]||tasaDolar),montoUSD:parseFloat(i[6]||0),socioID:i[7]||''}));
+        socios = (data.socios||[]).map(s => ({id:s[0],nombre:s[1],porcentaje:parseFloat(s[2]||50),telefono:s[3]||''}));
         sessionStorage.setItem('vp_pass', password);
     }
 }
 
 function mostrarToast(m, t='success') {
-    let el = document.createElement('div');
-    el.className = 'toast '+t; el.textContent = m;
+    let el = document.createElement('div'); el.className = 'toast '+t; el.textContent = m;
     document.getElementById('toastContainer').appendChild(el);
     setTimeout(() => el.remove(), 3000);
 }
-
 function actualizarFechaHora() {
     document.getElementById('fechaHora').textContent = new Date().toLocaleDateString('es-VE', {hour:'2-digit',minute:'2-digit'});
 }
-
 function cambiarModulo(mod) {
     document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
     document.getElementById('modulo-'+mod).classList.add('active');
@@ -388,53 +439,73 @@ function cambiarModulo(mod) {
     if (event && event.target) event.target.classList.add('active');
     cargarTodo();
 }
-
 function fechaInputAFormato(d) {
     if (!d) return new Date().toLocaleDateString('es-VE');
     let p = d.split('-'); return p[2]+'/'+p[1]+'/'+p[0];
 }
+function fechaFormatoAInput(f) {
+    if (!f) return ''; let p = f.split('/');
+    if (p.length !== 3) return '';
+    return p[2]+'-'+p[1].padStart(2,'0')+'-'+p[0].padStart(2,'0');
+}
+
+// ==================== BUSCADOR GLOBAL ====================
+function buscarGlobal(termino) {
+    if (!termino || termino.length < 2) { let old = document.getElementById('resultadosBusqueda'); if (old) old.remove(); return; }
+    termino = termino.toLowerCase();
+    let resultados = [];
+    clientes.forEach(c => { if (c.nombre.toLowerCase().includes(termino)) resultados.push({tipo:'👤 Cliente', texto:c.nombre, accion:()=>{cambiarModulo('cobranza');document.getElementById('selectClienteCobranza').value=c.id;cargarCobranza();}}); });
+    pedidos.forEach(p => { if (p.id.toLowerCase().includes(termino)||p.clienteNombre.toLowerCase().includes(termino)) resultados.push({tipo:'🧾 Pedido', texto:`${p.id} - ${p.clienteNombre}`, accion:()=>{cambiarModulo('historial');}}); });
+    productos.forEach(p => { if (p.nombre.toLowerCase().includes(termino)) resultados.push({tipo:'📦 Producto', texto:`${p.nombre} - Stock:${p.stock}`, accion:()=>{cambiarModulo('productos');editarProducto(p.id);}}); });
+    
+    if (resultados.length > 0) {
+        let html = '<div style="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:white;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.3);z-index:300;max-width:400px;width:90%;max-height:300px;overflow-y:auto;padding:10px;"><small style="color:var(--text-light);">Resultados:</small>';
+        resultados.slice(0,8).forEach((r,i) => { html += `<div onclick="document.getElementById('resultadosBusqueda').remove();window._resultados[${i}].accion()" style="padding:10px;cursor:pointer;border-radius:8px;" onmouseover="this.style.background='#f0f6ff'" onmouseout="this.style.background='transparent'"><strong>${r.tipo}</strong>: ${r.texto}</div>`; });
+        html += '</div>';
+        let old = document.getElementById('resultadosBusqueda'); if (old) old.remove();
+        let div = document.createElement('div'); div.id = 'resultadosBusqueda'; div.innerHTML = html;
+        document.body.appendChild(div);
+        window._resultados = resultados;
+    }
+}
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#resultadosBusqueda') && !e.target.closest('#buscadorGlobal')) {
+        let old = document.getElementById('resultadosBusqueda'); if (old) old.remove();
+    }
+});
 
 // ==================== AUTENTICACIÓN ====================
 async function verificarPassword() {
     await cargarDatos();
-    let input = document.getElementById('passwordInput').value;
-    if (input === password) {
+    if (document.getElementById('passwordInput').value === password) {
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('appContainer').classList.add('active');
         sessionStorage.setItem('vp_auth', 'true');
+        if (localStorage.getItem('tema') === 'dark') document.body.classList.add('dark');
         iniciarApp();
     } else {
         document.getElementById('loginError').style.display = 'block';
         setTimeout(() => document.getElementById('loginError').style.display = 'none', 2000);
     }
 }
-
 function mostrarCambiarPassword() {
     let box = document.getElementById('cambiarPasswordBox');
     box.style.display = box.style.display === 'none' ? 'block' : 'none';
-    document.getElementById('oldPassword').value = '';
-    document.getElementById('newPassword').value = '';
-    document.getElementById('confirmPassword').value = '';
 }
-
 function mostrarCambiarPasswordDesdeApp() {
     document.getElementById('loginScreen').style.display = 'flex';
     document.getElementById('appContainer').classList.remove('active');
-    document.getElementById('passwordInput').value = '';
     mostrarCambiarPassword();
     document.getElementById('cambiarPasswordBox').style.display = 'block';
 }
-
 async function cambiarPassword() {
     let oldPass = document.getElementById('oldPassword').value;
     let newPass = document.getElementById('newPassword').value;
     let confirmPass = document.getElementById('confirmPassword').value;
     let errorEl = document.getElementById('cambiarPasswordError');
-    
     if (oldPass !== password) { errorEl.textContent = '❌ Contraseña actual incorrecta'; errorEl.style.display = 'block'; return; }
     if (newPass.length < 4) { errorEl.textContent = '❌ Mínimo 4 caracteres'; errorEl.style.display = 'block'; return; }
     if (newPass !== confirmPass) { errorEl.textContent = '❌ No coinciden'; errorEl.style.display = 'block'; return; }
-    
     let result = await callAPI('cambiarPassword', newPass);
     if (result && result.ok) {
         password = newPass; sessionStorage.setItem('vp_pass', password);
@@ -443,17 +514,14 @@ async function cambiarPassword() {
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('appContainer').classList.add('active');
         iniciarApp();
-    } else { errorEl.textContent = '❌ Error de conexión'; errorEl.style.display = 'block'; }
+    }
 }
-
-function cerrarSesion() {
-    if (confirm('¿Cerrar sesión?')) { sessionStorage.removeItem('vp_auth'); location.reload(); }
-}
-
+function cerrarSesion() { if (confirm('¿Cerrar sesión?')) { sessionStorage.removeItem('vp_auth'); location.reload(); } }
 if (sessionStorage.getItem('vp_auth') === 'true') {
     password = sessionStorage.getItem('vp_pass') || 'admin2026';
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appContainer').classList.add('active');
+    if (localStorage.getItem('tema') === 'dark') document.body.classList.add('dark');
     iniciarApp();
 }
 
@@ -470,8 +538,7 @@ async function guardarProducto() {
     mostrarToast('✅ Producto guardado');
 }
 function editarProducto(id) {
-    let prod = productos.find(p => p.id === id);
-    if (!prod) return;
+    let prod = productos.find(p => p.id === id); if (!prod) return;
     document.getElementById('editandoProdId').value = prod.id;
     document.getElementById('nombreProd').value = prod.nombre;
     document.getElementById('catProd').value = prod.categoria;
@@ -484,7 +551,6 @@ async function eliminarProducto(id) {
     if (!confirm('¿Eliminar?')) return;
     await callAPI('eliminarProducto', id);
     await cargarDatos(); cargarTodo();
-    mostrarToast('🗑️ Producto eliminado');
 }
 function limpiarFormProd() {
     document.getElementById('editandoProdId').value = '';
@@ -503,11 +569,9 @@ async function guardarCliente() {
     if (!n) { mostrarToast('⚠️ Nombre obligatorio', 'warning'); return; }
     await callAPI('guardarCliente', id, n, t, d);
     limpiarFormCli(); await cargarDatos(); cargarTodo();
-    mostrarToast('✅ Cliente guardado');
 }
 function editarCliente(id) {
-    let cli = clientes.find(c => c.id === id);
-    if (!cli) return;
+    let cli = clientes.find(c => c.id === id); if (!cli) return;
     document.getElementById('editandoCliId').value = cli.id;
     document.getElementById('nombreCli').value = cli.nombre;
     document.getElementById('telCli').value = cli.telefono;
@@ -519,7 +583,6 @@ async function eliminarCliente(id) {
     if (!confirm('¿Eliminar?')) return;
     await callAPI('eliminarCliente', id);
     await cargarDatos(); cargarTodo();
-    mostrarToast('🗑️ Cliente eliminado');
 }
 function limpiarFormCli() {
     document.getElementById('editandoCliId').value = '';
@@ -538,13 +601,13 @@ function agregarAlCarrito() {
     let cant = parseInt(document.getElementById('cantidadPedido').value);
     if (!id || !cant || cant < 1) { mostrarToast('⚠️ Selecciona producto y cantidad', 'warning'); return; }
     let prod = productos.find(p => p.id === id);
-    if (prod && cant > prod.stock) { mostrarToast('⚠️ Stock insuficiente. Disponible: ' + prod.stock, 'error'); return; }
+    if (prod && cant > prod.stock) { mostrarToast('⚠️ Stock insuficiente', 'error'); return; }
     let existente = carrito.find(i => i.productoId === id);
     if (existente) { existente.cantidad += cant; }
-    else { carrito.push({productoId:id, productoNombre:nombre, precio:precio, cantidad:cant, categoria:opt?.dataset?.cat||''}); }
+    else { carrito.push({productoId:id, productoNombre:nombre, precio, cantidad:cant, categoria:opt?.dataset?.cat||''}); }
     document.getElementById('cantidadPedido').value = 1;
     document.getElementById('productoPedido').value = '';
-    mostrarCarrito(); mostrarToast('🛒 Agregado al carrito');
+    mostrarCarrito();
 }
 function quitarDelCarrito(i) { carrito.splice(i,1); mostrarCarrito(); }
 function vaciarCarrito() { if (carrito.length && confirm('¿Vaciar?')) { carrito = []; mostrarCarrito(); } }
@@ -586,7 +649,7 @@ async function registrarPedido() {
     document.getElementById('nuevoClienteNombre').value = '';
     document.getElementById('clientePedido').value = '';
     await cargarDatos(); cargarTodo();
-    mostrarToast('✅ Pedido registrado: $' + total.toFixed(2) + ' / Bs ' + (total*tasaDolar).toFixed(2));
+    mostrarToast('✅ Pedido registrado: $' + total.toFixed(2));
 }
 
 // ==================== COBRANZA ====================
@@ -597,155 +660,65 @@ function cargarCobranza() {
     if (!cliente) return;
     let peds = pedidos.filter(p => p.clienteId === cId);
     let pedsPendientes = peds.filter(p => p.estado !== 'Pagado');
-    if (peds.length === 0) { document.getElementById('cobranzaDetalle').innerHTML = '<p style="color:var(--text-light);">Sin pedidos.</p>'; return; }
-    let totalDebe = pedsPendientes.reduce((s, p) => s + (p.total - p.abonado), 0);
-    let totalPedidos = peds.reduce((s, p) => s + p.total, 0);
-    let totalAbonado = peds.reduce((s, p) => s + p.abonado, 0);
-    
-    let html = `
-        <div class="cliente-resumen">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px;">
-                <div><h3 style="color:var(--primary);margin:0;">👤 ${cliente.nombre}</h3><p style="color:var(--text-light);margin:5px 0;">📱 ${cliente.telefono||'Sin teléfono'} | 🏢 ${cliente.departamento||'Sin depto'}</p></div>
-                <div style="text-align:right;">
-                    <p style="margin:0;">Total pedidos: <strong>$${totalPedidos.toFixed(2)}</strong></p>
-                    <p style="margin:0;color:var(--success);">Total abonado: <strong>$${totalAbonado.toFixed(2)}</strong></p>
-                    <p style="margin:5px 0;font-size:1.4em;font-weight:800;color:var(--danger);">Debe: $${totalDebe.toFixed(2)} / Bs ${(totalDebe*tasaDolar).toFixed(2)}</p>
-                    ${totalDebe > 0 ? `<button class="btn btn-success" onclick="abonarDeudaTotal('${cId}')">💵 PAGAR TODO ($ ${totalDebe.toFixed(2)})</button>` : '<span class="badge badge-pagado" style="font-size:1em;">✅ Todo Pagado</span>'}
-                </div>
-            </div>
-        </div>`;
-    
+    if (peds.length === 0) { document.getElementById('cobranzaDetalle').innerHTML = '<p>Sin pedidos.</p>'; return; }
+    let totalDebe = pedsPendientes.reduce((s,p) => s + (p.total-p.abonado), 0);
+    let html = `<div class="cliente-resumen"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:15px;"><div><h3>👤 ${cliente.nombre}</h3><p>📱 ${cliente.telefono||'-'}</p></div><div style="text-align:right;"><p>Debe: <span style="font-size:1.4em;font-weight:800;color:var(--danger);">$${totalDebe.toFixed(2)} / Bs ${(totalDebe*tasaDolar).toFixed(2)}</span></p>${totalDebe>0?`<button class="btn btn-success" onclick="abonarDeudaTotal('${cId}')">💵 PAGAR TODO</button>`:'<span class="badge badge-pagado">✅ Todo Pagado</span>'}</div></div></div>`;
     if (pedsPendientes.length > 0) {
-        html += '<h4>⚠️ Pedidos Pendientes</h4><table><thead><tr><th>ID</th><th>Fecha</th><th>Productos</th><th>Total</th><th>Abonado</th><th>Restante USD</th><th>Restante Bs</th><th>Estado</th><th>Acción</th></tr></thead><tbody>';
-        pedsPendientes.reverse().forEach(p => {
-            let rest = p.total - p.abonado;
-            let itemsT = p.items.map(i => (i.productoNombre||'') + ' x' + i.cantidad).join(', ');
-            let ec = p.estado === 'Pendiente' ? 'badge-pendiente' : 'badge-abonado';
-            html += `<tr><td><strong>${p.id}</strong></td><td>${p.fecha}</td><td style="font-size:0.75em;">${itemsT}</td><td>$${p.total.toFixed(2)}</td><td style="color:var(--success);">$${p.abonado.toFixed(2)}</td><td style="color:var(--danger);font-weight:bold;">$${rest.toFixed(2)}</td><td style="color:var(--danger);">Bs ${(rest*tasaDolar).toFixed(2)}</td><td><span class="badge ${ec}">${p.estado}</span></td><td><div style="display:flex;gap:4px;"><button class="btn btn-info btn-xs" onclick="abrirModalAbono('${p.id}')">💵 Abonar</button><button class="btn btn-success btn-xs" onclick="pagarPedidoCompleto('${p.id}')">💰 Pagar</button></div></td></tr>`;
+        html += '<table><thead><tr><th>ID</th><th>Fecha</th><th>Total</th><th>Abonado</th><th>Restante</th><th>Acción</th></tr></thead><tbody>';
+        pedsPendientes.forEach(p => {
+            let rest = p.total-p.abonado;
+            html += `<tr><td>${p.id}</td><td>${p.fecha}</td><td>$${p.total.toFixed(2)}</td><td>$${p.abonado.toFixed(2)}</td><td style="color:var(--danger);">$${rest.toFixed(2)}</td><td><button class="btn btn-info btn-xs" onclick="abrirModalAbono('${p.id}')">💵</button> <button class="btn btn-success btn-xs" onclick="pagarPedidoCompleto('${p.id}')">💰</button></td></tr>`;
         });
-        html += `<tr style="background:#fff5f5;font-weight:bold;"><td colspan="5" style="text-align:right;">TOTAL PENDIENTE:</td><td style="color:var(--danger);font-size:1.1em;">$${totalDebe.toFixed(2)}</td><td style="color:var(--danger);">Bs ${(totalDebe*tasaDolar).toFixed(2)}</td><td colspan="2"></td></tr></tbody></table>`;
-    }
-    
-    let pedsPagados = peds.filter(p => p.estado === 'Pagado');
-    if (pedsPagados.length > 0) {
-        html += '<h4 style="margin-top:20px;">✅ Pedidos Pagados</h4><table><thead><tr><th>ID</th><th>Fecha</th><th>Productos</th><th>Total</th><th>Fecha Pago</th></tr></thead><tbody>';
-        pedsPagados.reverse().forEach(p => { html += `<tr><td>${p.id}</td><td>${p.fecha}</td><td style="font-size:0.75em;">${p.items.map(i=>i.productoNombre+' x'+i.cantidad).join(', ')}</td><td>$${p.total.toFixed(2)}</td><td>${p.fechaPago||'-'}</td></tr>`; });
-        html += '</tbody></table>';
-    }
-    
-    let abs = abonos.filter(a => peds.some(p => p.id === a.pedidoId));
-    if (abs.length > 0) {
-        html += '<h4 style="margin-top:20px;">💵 Historial de Pagos</h4><table><thead><tr><th>Fecha</th><th>Pedido</th><th>Monto USD</th><th>Monto Bs</th><th>Tasa</th><th>Ref</th><th>Banco</th></tr></thead><tbody>';
-        abs.reverse().forEach(a => { html += `<tr><td>${a.fecha}</td><td>${a.pedidoId}</td><td style="color:var(--success);font-weight:bold;">$${a.montoUSD.toFixed(2)}</td><td style="color:var(--success);">Bs ${(a.montoVES||(a.montoUSD*a.tasaPago)).toFixed(2)}</td><td>Bs ${(a.tasaPago||tasaDolar).toFixed(2)}</td><td>${a.refPago||'-'}</td><td>${a.banco||'-'}</td></tr>`; });
         html += '</tbody></table>';
     }
     document.getElementById('cobranzaDetalle').innerHTML = html;
 }
 
 // ==================== MODALES DE PAGO ====================
-function abrirModalAbono(pedidoId) {
-    let p = pedidos.find(pe => pe.id === pedidoId); if (!p) return;
-    let restante = p.total - p.abonado; if (restante <= 0) { mostrarToast('✅ Ya está pagado'); return; }
-    let itemsT = p.items.map(i => (i.productoNombre||'') + ' x' + i.cantidad).join(', ');
-    let modalHTML = `
-        <div class="modal-overlay active" id="modalAbonoPedido" onclick="if(event.target===this) cerrarModalAbonoPedido()">
-            <div class="modal"><h3>💵 REGISTRAR ABONO</h3>
-                <p><strong>Pedido:</strong> #${p.id} | <strong>Cliente:</strong> ${p.clienteNombre}</p>
-                <p style="font-size:0.85em;">${itemsT}</p>
-                <p>Total: <strong>$${p.total.toFixed(2)}</strong> | Abonado: <strong style="color:var(--success);">$${p.abonado.toFixed(2)}</strong></p>
-                <p style="font-size:1.2em;color:var(--danger);"><strong>Restante: $${restante.toFixed(2)} / Bs ${(restante*tasaDolar).toFixed(2)}</strong></p>
-                <div class="form-group"><label>💰 Monto USD <span class="required">*</span></label><input type="number" id="modalMontoAbono" step="0.01" min="0.01" max="${restante.toFixed(2)}" placeholder="0.00" oninput="calcularBsAbono()"><small>Máx: $${restante.toFixed(2)}</small><div style="margin-top:5px;color:var(--success);font-weight:600;" id="modalMontoAbonoVES">Bs 0.00</div></div>
-                <div class="form-group"><label>📱 Referencia <span class="required">*</span></label><input type="text" id="modalRefAbono" placeholder="Ej: 0123 / 12345678"></div>
-                <div class="form-group"><label>🏦 Banco</label><select id="modalBancoAbono"><option value="">-- Seleccionar --</option><option>Banco de Venezuela</option><option>Banco Mercantil</option><option>Banco Provincial</option><option>Banesco</option><option>Banco del Tesoro</option><option>Bancamiga</option><option>Otro</option></select></div>
-                <div class="form-group"><label>📝 Nota</label><input type="text" id="modalNotaAbono" placeholder="Opcional"></div>
-                <div class="btn-group"><button class="btn btn-success" onclick="confirmarAbono('${pedidoId}', ${restante})">✅ Registrar</button><button class="btn btn-outline" onclick="cerrarModalAbonoPedido()">Cancelar</button></div>
-            </div></div>`;
-    let mc = document.createElement('div'); mc.id = 'modalAbonoPedidoContainer'; mc.innerHTML = modalHTML; document.body.appendChild(mc);
+function abrirModalAbono(pid) {
+    let p = pedidos.find(pe=>pe.id===pid); if(!p) return;
+    let rest = p.total-p.abonado; if(rest<=0){mostrarToast('✅ Ya pagado');return;}
+    let m = document.createElement('div'); m.innerHTML = `<div class="modal-overlay active" onclick="if(event.target===this)this.remove()"><div class="modal"><h3>💵 REGISTRAR ABONO</h3><p><strong>Pedido:</strong> #${p.id} | <strong>Cliente:</strong> ${p.clienteNombre}</p><p style="font-size:1.2em;color:var(--danger);"><strong>Restante: $${rest.toFixed(2)} / Bs ${(rest*tasaDolar).toFixed(2)}</strong></p><div class="form-group"><label>💰 Monto USD <span class="required">*</span></label><input type="number" id="modalMontoAbono" step="0.01" min="0.01" max="${rest.toFixed(2)}" placeholder="0.00" oninput="calcularBsAbono()"><div id="modalMontoAbonoVES">Bs 0.00</div></div><div class="form-group"><label>📱 Referencia <span class="required">*</span></label><input type="text" id="modalRefAbono"></div><div class="form-group"><label>🏦 Banco</label><select id="modalBancoAbono"><option value="">--</option><option>Venezuela</option><option>Mercantil</option><option>Provincial</option><option>Banesco</option><option>Tesoro</option><option>Bancamiga</option><option>Otro</option></select></div><div class="form-group"><label>📝 Nota</label><input type="text" id="modalNotaAbono"></div><div class="btn-group"><button class="btn btn-success" onclick="confirmarAbono('${pid}',${rest})">✅ Registrar</button><button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">Cancelar</button></div></div></div>`;
+    document.body.appendChild(m);
 }
-function cerrarModalAbonoPedido() { let m = document.getElementById('modalAbonoPedidoContainer'); if(m) m.remove(); }
-function calcularBsAbono() { let mt = parseFloat(document.getElementById('modalMontoAbono').value)||0; document.getElementById('modalMontoAbonoVES').textContent = 'Bs '+(mt*tasaDolar).toFixed(2); }
-async function confirmarAbono(pedidoId, restanteMax) {
+function calcularBsAbono() { let mt = parseFloat(document.getElementById('modalMontoAbono')?.value)||0; let el = document.getElementById('modalMontoAbonoVES'); if(el) el.textContent = 'Bs '+(mt*tasaDolar).toFixed(2); }
+async function confirmarAbono(pid, restMax) {
     let monto = parseFloat(document.getElementById('modalMontoAbono').value);
     let ref = document.getElementById('modalRefAbono').value.trim();
     let banco = document.getElementById('modalBancoAbono').value;
     let nota = document.getElementById('modalNotaAbono').value.trim();
-    if (isNaN(monto)||monto<=0) { mostrarToast('⚠️ Monto inválido','error'); return; }
-    if (monto>restanteMax) { mostrarToast('⚠️ Excede restante','error'); return; }
-    if (!ref) { mostrarToast('⚠️ Referencia obligatoria','error'); return; }
-    cerrarModalAbonoPedido();
-    let p = pedidos.find(pe=>pe.id===pedidoId); if(!p) return;
-    let abono = {id:'AB'+(abonos.length+1).toString().padStart(3,'0'),fecha:new Date().toLocaleDateString('es-VE'),pedidoId,cliente:p.clienteNombre,montoUSD:monto,montoVES:parseFloat((monto*tasaDolar).toFixed(2)),tasaPago:tasaDolar,refPago:ref,banco,nota:nota||('Ref: '+ref)};
+    if (isNaN(monto)||monto<=0||monto>restMax||!ref) { mostrarToast('⚠️ Datos inválidos','error'); return; }
+    document.querySelectorAll('.modal-overlay').forEach(m=>m.remove());
+    let abono = {id:'AB'+(abonos.length+1).toString().padStart(3,'0'),fecha:new Date().toLocaleDateString('es-VE'),pedidoId:pid,cliente:pedidos.find(p=>p.id===pid).clienteNombre,montoUSD:monto,montoVES:parseFloat((monto*tasaDolar).toFixed(2)),tasaPago:tasaDolar,refPago:ref,banco,nota:nota||('Ref: '+ref)};
     await callAPI('guardarAbono', JSON.stringify(abono));
     await cargarDatos(); cargarTodo();
-    mostrarToast('✅ Abono: $'+monto.toFixed(2)+' | Ref: '+ref);
+    mostrarToast('✅ Abono: $'+monto.toFixed(2));
 }
-
-async function pagarPedidoCompleto(pedidoId) {
-    let p = pedidos.find(pe=>pe.id===pedidoId); if(!p) return;
-    let restante = p.total-p.abonado; if(restante<=0){mostrarToast('✅ Ya pagado');return;}
-    let itemsT = p.items.map(i=>(i.productoNombre||'')+' x'+i.cantidad).join(', ');
-    let modalHTML = `
-        <div class="modal-overlay active" id="modalPagoPedido" onclick="if(event.target===this) cerrarModalPagoPedido()">
-            <div class="modal"><h3>💰 PAGAR PEDIDO COMPLETO</h3>
-                <p><strong>Pedido:</strong> #${p.id} | <strong>Cliente:</strong> ${p.clienteNombre}</p>
-                <p style="font-size:0.85em;">${itemsT}</p>
-                <p style="font-size:1.2em;color:var(--danger);"><strong>Total: $${restante.toFixed(2)} / Bs ${(restante*tasaDolar).toFixed(2)}</strong></p>
-                <div class="form-group"><label>📱 Referencia <span class="required">*</span></label><input type="text" id="modalRefPagoPedido" placeholder="Ej: 0123 / 12345678"></div>
-                <div class="form-group"><label>🏦 Banco</label><select id="modalBancoPedido"><option value="">-- Seleccionar --</option><option>Banco de Venezuela</option><option>Banco Mercantil</option><option>Banco Provincial</option><option>Banesco</option><option>Banco del Tesoro</option><option>Bancamiga</option><option>Otro</option></select></div>
-                <div class="form-group"><label>📝 Nota</label><input type="text" id="modalNotaPedido" placeholder="Opcional"></div>
-                <div class="btn-group"><button class="btn btn-success" onclick="confirmarPagoPedido('${pedidoId}', ${restante})">✅ Confirmar</button><button class="btn btn-outline" onclick="cerrarModalPagoPedido()">Cancelar</button></div>
-            </div></div>`;
-    let mc = document.createElement('div'); mc.id = 'modalPagoPedidoContainer'; mc.innerHTML = modalHTML; document.body.appendChild(mc);
-}
-function cerrarModalPagoPedido() { let m = document.getElementById('modalPagoPedidoContainer'); if(m) m.remove(); }
-async function confirmarPagoPedido(pedidoId, restante) {
-    let ref = document.getElementById('modalRefPagoPedido').value.trim();
-    let banco = document.getElementById('modalBancoPedido').value;
-    let nota = document.getElementById('modalNotaPedido').value.trim();
+async function pagarPedidoCompleto(pid) {
+    let p = pedidos.find(pe=>pe.id===pid); if(!p) return;
+    let rest = p.total-p.abonado; if(rest<=0){mostrarToast('✅ Ya pagado');return;}
+    let ref = prompt('📱 Referencia de pago (obligatorio):', '');
     if (!ref) { mostrarToast('⚠️ Referencia obligatoria','error'); return; }
-    cerrarModalPagoPedido();
-    let p = pedidos.find(pe=>pe.id===pedidoId); if(!p) return;
-    let abono = {id:'AB'+(abonos.length+1).toString().padStart(3,'0'),fecha:new Date().toLocaleDateString('es-VE'),pedidoId,cliente:p.clienteNombre,montoUSD:restante,montoVES:parseFloat((restante*tasaDolar).toFixed(2)),tasaPago:tasaDolar,refPago:ref,banco,nota:nota||('Ref: '+ref)};
+    let abono = {id:'AB'+(abonos.length+1).toString().padStart(3,'0'),fecha:new Date().toLocaleDateString('es-VE'),pedidoId:pid,cliente:p.clienteNombre,montoUSD:rest,montoVES:parseFloat((rest*tasaDolar).toFixed(2)),tasaPago:tasaDolar,refPago:ref,banco:'',nota:'Pago completo - Ref: '+ref};
     await callAPI('guardarAbono', JSON.stringify(abono));
     await cargarDatos(); cargarTodo();
-    mostrarToast('✅ Pedido #'+pedidoId+' pagado | Ref: '+ref);
+    mostrarToast('✅ Pedido #'+pid+' pagado');
 }
-
-async function abonarDeudaTotal(clienteId) {
-    let cliente = clientes.find(c=>c.id===clienteId); if(!cliente) return;
-    let peds = pedidos.filter(p=>p.clienteId===clienteId && p.estado!=='Pagado');
+async function abonarDeudaTotal(cId) {
+    let peds = pedidos.filter(p=>p.clienteId===cId && p.estado!=='Pagado');
     if(!peds.length){mostrarToast('✅ Sin deudas');return;}
-    let totalDebe = peds.reduce((s,p)=>s+(p.total-p.abonado),0);
-    let modalHTML = `
-        <div class="modal-overlay active" id="modalPagoTotal" onclick="if(event.target===this) cerrarModalPagoTotal()">
-            <div class="modal"><h3>💵 PAGO TOTAL</h3>
-                <p><strong>Cliente:</strong> ${cliente.nombre}</p>
-                <p style="font-size:1.2em;color:var(--danger);"><strong>Total: $${totalDebe.toFixed(2)} / Bs ${(totalDebe*tasaDolar).toFixed(2)}</strong></p>
-                <div class="form-group"><label>📱 Referencia <span class="required">*</span></label><input type="text" id="modalRefPagoTotal" placeholder="Ej: 0123 / 12345678"></div>
-                <div class="form-group"><label>🏦 Banco</label><select id="modalBancoTotal"><option value="">-- Seleccionar --</option><option>Banco de Venezuela</option><option>Banco Mercantil</option><option>Banco Provincial</option><option>Banesco</option><option>Banco del Tesoro</option><option>Bancamiga</option><option>Otro</option></select></div>
-                <div class="form-group"><label>📝 Nota</label><input type="text" id="modalNotaTotal" placeholder="Opcional"></div>
-                <p style="font-size:0.85em;">📋 Se pagarán <strong>${peds.length}</strong> pedido(s)</p>
-                <div class="btn-group"><button class="btn btn-success" onclick="confirmarPagoTotal('${clienteId}', ${totalDebe})">✅ Confirmar</button><button class="btn btn-outline" onclick="cerrarModalPagoTotal()">Cancelar</button></div>
-            </div></div>`;
-    let mc = document.createElement('div'); mc.id = 'modalPagoTotalContainer'; mc.innerHTML = modalHTML; document.body.appendChild(mc);
-}
-function cerrarModalPagoTotal() { let m = document.getElementById('modalPagoTotalContainer'); if(m) m.remove(); }
-async function confirmarPagoTotal(clienteId, totalDebe) {
-    let ref = document.getElementById('modalRefPagoTotal').value.trim();
-    let banco = document.getElementById('modalBancoTotal').value;
-    let nota = document.getElementById('modalNotaTotal').value.trim();
+    let total = peds.reduce((s,p)=>s+(p.total-p.abonado),0);
+    let ref = prompt('📱 Referencia para pago TOTAL de $'+total.toFixed(2)+':', '');
     if (!ref) { mostrarToast('⚠️ Referencia obligatoria','error'); return; }
-    cerrarModalPagoTotal();
-    let peds = pedidos.filter(p=>p.clienteId===clienteId && p.estado!=='Pagado');
     for (let p of peds) {
-        let restante = p.total-p.abonado;
-        if(restante>0) {
-            let abono = {id:'AB'+(abonos.length+1).toString().padStart(3,'0'),fecha:new Date().toLocaleDateString('es-VE'),pedidoId:p.id,cliente:p.clienteNombre,montoUSD:restante,montoVES:parseFloat((restante*tasaDolar).toFixed(2)),tasaPago:tasaDolar,refPago:ref,banco,nota:nota||('Ref: '+ref)};
+        let rest = p.total-p.abonado;
+        if(rest>0) {
+            let abono = {id:'AB'+(abonos.length+1).toString().padStart(3,'0'),fecha:new Date().toLocaleDateString('es-VE'),pedidoId:p.id,cliente:p.clienteNombre,montoUSD:rest,montoVES:parseFloat((rest*tasaDolar).toFixed(2)),tasaPago:tasaDolar,refPago:ref,banco:'',nota:'Pago total - Ref: '+ref};
             await callAPI('guardarAbono', JSON.stringify(abono));
         }
     }
     await cargarDatos(); cargarTodo();
-    mostrarToast('✅ Pago total: $'+totalDebe.toFixed(2)+' | Ref: '+ref);
+    mostrarToast('✅ Pago total: $'+total.toFixed(2));
 }
 
 // ==================== INVERSIONES ====================
@@ -754,17 +727,91 @@ function calcInvUSD() {
     let t = parseFloat(document.getElementById('tasaInversion').value)||tasaDolar;
     document.getElementById('inversionUSD').textContent = '$'+(bs/t).toFixed(2);
 }
-async function registrarInversion() {
+async function guardarInversion() {
+    let editIndex = document.getElementById('editandoInversionIndex').value;
     let cat = document.getElementById('catInversion').value;
     let desc = document.getElementById('descInversion').value.trim();
     let bs = parseFloat(document.getElementById('montoBsInversion').value);
     let t = parseFloat(document.getElementById('tasaInversion').value)||tasaDolar;
-    if(isNaN(bs)||bs<=0){mostrarToast('⚠️ Monto inválido','warning');return;}
-    let inv = {id:'INV'+(inversiones.length+1).toString().padStart(3,'0'),fecha:fechaInputAFormato(document.getElementById('fechaInversion').value),categoria:cat,descripcion:desc||'Inversión',montoBs:bs,tasaInversion:t,montoUSD:parseFloat((bs/t).toFixed(2))};
-    await callAPI('guardarInversion', JSON.stringify(inv));
-    document.getElementById('descInversion').value=''; document.getElementById('montoBsInversion').value=''; document.getElementById('inversionUSD').textContent='$0.00';
+    let fecha = fechaInputAFormato(document.getElementById('fechaInversion').value);
+    let socioID = document.getElementById('socioInversion').value;
+    if (isNaN(bs)||bs<=0) { mostrarToast('⚠️ Monto inválido','warning'); return; }
+    let invData = {
+        id: editIndex ? inversiones[editIndex].id : 'INV'+(inversiones.length+1).toString().padStart(3,'0'),
+        fecha, categoria:cat, descripcion:desc||'Inversión', montoBs:bs, tasaInversion:t,
+        montoUSD: parseFloat((bs/t).toFixed(2)), socioID
+    };
+    if (editIndex !== '') { inversiones[editIndex] = invData; }
+    else { inversiones.push(invData); }
+    await callAPI('guardarInversion', JSON.stringify(invData));
+    cancelarEdicionInversion();
     await cargarDatos(); cargarTodo();
-    mostrarToast('✅ Inversión: $'+(bs/t).toFixed(2));
+    mostrarToast(editIndex!==''?'✅ Inversión actualizada':'✅ Inversión registrada');
+}
+function editarInversion(index) {
+    let inv = inversiones[index]; if (!inv) return;
+    document.getElementById('editandoInversionIndex').value = index;
+    document.getElementById('catInversion').value = inv.categoria;
+    document.getElementById('descInversion').value = inv.descripcion;
+    document.getElementById('montoBsInversion').value = inv.montoBs;
+    document.getElementById('tasaInversion').value = inv.tasaInversion;
+    document.getElementById('fechaInversion').value = fechaFormatoAInput(inv.fecha);
+    document.getElementById('socioInversion').value = inv.socioID || '';
+    calcInvUSD();
+    document.getElementById('btnGuardarInversion').textContent = '✏️ Actualizar';
+    document.getElementById('btnCancelarInversion').style.display = 'inline-flex';
+}
+function cancelarEdicionInversion() {
+    document.getElementById('editandoInversionIndex').value = '';
+    document.getElementById('descInversion').value = '';
+    document.getElementById('montoBsInversion').value = '';
+    document.getElementById('tasaInversion').value = tasaDolar;
+    document.getElementById('fechaInversion').value = new Date().toISOString().split('T')[0];
+    document.getElementById('socioInversion').value = '';
+    document.getElementById('inversionUSD').textContent = '$0.00';
+    document.getElementById('btnGuardarInversion').textContent = '💸 Registrar';
+    document.getElementById('btnCancelarInversion').style.display = 'none';
+}
+async function eliminarInversion(index) {
+    if (!confirm('¿Eliminar esta inversión?')) return;
+    inversiones.splice(index, 1);
+    await callAPI('limpiarInversiones');
+    for (let inv of inversiones) { await callAPI('guardarInversion', JSON.stringify(inv)); }
+    await cargarDatos(); cargarTodo();
+    mostrarToast('🗑️ Inversión eliminada');
+}
+
+// ==================== SOCIOS ====================
+async function guardarSocio() {
+    let id = document.getElementById('editandoSocioId').value || '';
+    let n = document.getElementById('nombreSocio').value.trim();
+    let p = document.getElementById('porcentajeSocio').value;
+    let t = document.getElementById('telefonoSocio').value.trim();
+    if (!n || !p) { mostrarToast('⚠️ Completa nombre y porcentaje', 'warning'); return; }
+    await callAPI('guardarSocio', id, n, p, t);
+    limpiarFormSocio(); await cargarDatos(); cargarTodo();
+    mostrarToast('✅ Socio guardado');
+}
+function editarSocio(id) {
+    let s = socios.find(so => so.id === id); if (!s) return;
+    document.getElementById('editandoSocioId').value = s.id;
+    document.getElementById('nombreSocio').value = s.nombre;
+    document.getElementById('porcentajeSocio').value = s.porcentaje;
+    document.getElementById('telefonoSocio').value = s.telefono;
+    document.getElementById('btnCancelarSocio').style.display = 'inline-flex';
+}
+function cancelarEdicionSocio() { limpiarFormSocio(); }
+async function eliminarSocio(id) {
+    if (!confirm('¿Eliminar socio?')) return;
+    await callAPI('eliminarSocio', id);
+    await cargarDatos(); cargarTodo();
+}
+function limpiarFormSocio() {
+    document.getElementById('editandoSocioId').value = '';
+    document.getElementById('nombreSocio').value = '';
+    document.getElementById('porcentajeSocio').value = '';
+    document.getElementById('telefonoSocio').value = '';
+    document.getElementById('btnCancelarSocio').style.display = 'none';
 }
 
 // ==================== TASA ====================
@@ -774,7 +821,58 @@ async function guardarTasa() {
     tasaDolar = val;
     await callAPI('guardarTasa', tasaDolar);
     await cargarDatos(); cargarTodo();
-    mostrarToast('✅ Tasa: Bs '+tasaDolar.toFixed(2)+' / USD');
+    mostrarToast('✅ Tasa: Bs '+tasaDolar.toFixed(2));
+}
+
+// ==================== REPORTE POR CORREO ====================
+function enviarReporteEmail() {
+    let tV = pedidos.reduce((s,p)=>s+p.total,0);
+    let tP = pedidos.filter(p=>p.estado!=='Pagado').reduce((s,p)=>s+(p.total-p.abonado),0);
+    let tA = abonos.reduce((s,a)=>s+a.montoUSD,0);
+    let reporte = `📊 REPORTE VENTASPRO - ${new Date().toLocaleDateString('es-VE')}\n━━━━━━━━━━━━━━━━━━━━━\n\n💰 Ventas: $${tV.toFixed(2)}\n💵 Pagos: $${tA.toFixed(2)}\n⚠️ Por Cobrar: $${tP.toFixed(2)}\n💲 Tasa: Bs ${tasaDolar.toFixed(2)}\n\n━━━━━━━━━━━━━━━━━━━━━\nGenerado por VentasPro - Rony Pérez`;
+    window.open('mailto:?subject='+encodeURIComponent('Reporte VentasPro')+'&body='+encodeURIComponent(reporte), '_blank');
+    mostrarToast('📧 Abriendo correo...');
+}
+
+// ==================== GRÁFICOS ====================
+function dibujarGraficos() {
+    let ventasPorMes = {};
+    let meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    pedidos.forEach(p => {
+        let partes = p.fecha.split('/');
+        if (partes.length === 3) {
+            let mes = parseInt(partes[1]) - 1;
+            if (!ventasPorMes[mes]) ventasPorMes[mes] = 0;
+            ventasPorMes[mes] += p.total;
+        }
+    });
+    let datosMeses = meses.map((m,i) => ventasPorMes[i] || 0);
+    
+    let ctx1 = document.getElementById('graficoVentas');
+    if (ctx1) {
+        if (graficoVentasInstance) graficoVentasInstance.destroy();
+        graficoVentasInstance = new Chart(ctx1, {
+            type: 'bar',
+            data: { labels: meses, datasets: [{ label: 'Ventas USD', data: datosMeses, backgroundColor: '#1e3a5f', borderRadius: 5 }] },
+            options: { responsive: true, plugins: { legend: { display: false } } }
+        });
+    }
+    
+    let vCat = {};
+    pedidos.forEach(p => { p.items.forEach(item => { let cat = item.categoria || 'Otros'; if (!vCat[cat]) vCat[cat] = 0; vCat[cat] += item.precio * item.cantidad; }); });
+    let colores = ['#1e3a5f','#2d6a4f','#c9a84c','#9b2226','#2563eb','#ca8a04'];
+    let labelsCat = Object.keys(vCat);
+    let datosCat = labelsCat.map(c => vCat[c]);
+    
+    let ctx2 = document.getElementById('graficoCategorias');
+    if (ctx2) {
+        if (graficoCategoriasInstance) graficoCategoriasInstance.destroy();
+        graficoCategoriasInstance = new Chart(ctx2, {
+            type: 'doughnut',
+            data: { labels: labelsCat, datasets: [{ data: datosCat, backgroundColor: colores.slice(0, labelsCat.length) }] },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
 }
 
 // ==================== CARGAR VISTAS ====================
@@ -786,7 +884,7 @@ function cargarTodo() {
     
     // Productos
     let hp = '<table><thead><tr><th>Nombre</th><th>USD</th><th>Bs</th><th>Stock</th><th>Acc</th></tr></thead><tbody>';
-    productos.forEach(p => { hp += `<tr><td><strong>${p.nombre}</strong></td><td class="precio-usd">$${p.precio.toFixed(2)}</td><td class="precio-ves">Bs ${(p.precio*tasaDolar).toFixed(2)}</td><td>${p.stock}</td><td><button class="btn btn-warning btn-xs" onclick="editarProducto('${p.id}')">✏️</button> <button class="btn btn-danger btn-xs" onclick="eliminarProducto('${p.id}')">🗑️</button></td></tr>`; });
+    productos.forEach(p => { hp += `<tr><td><strong>${p.nombre}</strong></td><td>$${p.precio.toFixed(2)}</td><td>Bs ${(p.precio*tasaDolar).toFixed(2)}</td><td>${p.stock}</td><td><button class="btn btn-warning btn-xs" onclick="editarProducto('${p.id}')">✏️</button> <button class="btn btn-danger btn-xs" onclick="eliminarProducto('${p.id}')">🗑️</button></td></tr>`; });
     document.getElementById('tablaProductos').innerHTML = hp + '</tbody></table>';
     let selProd = document.getElementById('productoPedido'); selProd.innerHTML = '<option value="">-- Seleccionar --</option>';
     productos.filter(p => p.stock > 0).forEach(p => { selProd.innerHTML += `<option value="${p.id}" data-precio="${p.precio}" data-nombre="${p.nombre}" data-cat="${p.categoria}">${p.nombre} - $${p.precio.toFixed(2)} (${p.stock})</option>`; });
@@ -795,67 +893,81 @@ function cargarTodo() {
     let hc = '<table><thead><tr><th>Nombre</th><th>Tel</th><th>Depto</th><th>Acc</th></tr></thead><tbody>';
     clientes.forEach(c => { hc += `<tr><td><strong>${c.nombre}</strong></td><td>${c.telefono}</td><td>${c.departamento}</td><td><button class="btn btn-warning btn-xs" onclick="editarCliente('${c.id}')">✏️</button> <button class="btn btn-danger btn-xs" onclick="eliminarCliente('${c.id}')">🗑️</button></td></tr>`; });
     document.getElementById('tablaClientes').innerHTML = hc + '</tbody></table>';
-    let selCli = document.getElementById('clientePedido'); selCli.innerHTML = '<option value="">-- Seleccionar --</option>';
-    clientes.forEach(c => { selCli.innerHTML += `<option value="${c.id}">${c.nombre}</option>`; });
-    let selCob = document.getElementById('selectClienteCobranza'); selCob.innerHTML = '<option value="">-- Seleccionar --</option>';
-    clientes.forEach(c => { selCob.innerHTML += `<option value="${c.id}">${c.nombre}</option>`; });
+    document.getElementById('clientePedido').innerHTML = '<option value="">-- Seleccionar --</option>' + clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+    document.getElementById('selectClienteCobranza').innerHTML = '<option value="">-- Seleccionar --</option>' + clientes.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
     
     // Historial
-    let hh = '<table><thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total USD</th><th>Total Bs</th><th>Abonado</th><th>Restante</th><th>Estado</th></tr></thead><tbody>';
+    let hh = '<table><thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total</th><th>Abonado</th><th>Restante</th><th>Estado</th></tr></thead><tbody>';
     [...pedidos].reverse().forEach(p => {
         let rest = p.total - p.abonado;
-        let itemsT = p.items.map(i => (i.productoNombre||'')+' x'+i.cantidad).join(', ');
         let ec = p.estado==='Pendiente'?'badge-pendiente':(p.estado==='Abonado'?'badge-abonado':'badge-pagado');
-        hh += `<tr><td><strong>${p.id}</strong></td><td>${p.fecha}</td><td>${p.clienteNombre}</td><td style="max-width:150px;font-size:0.75em;">${itemsT}</td><td class="precio-usd">$${p.total.toFixed(2)}</td><td class="precio-ves">Bs ${(p.totalVES||(p.total*p.tasaDolar)).toFixed(2)}</td><td style="color:var(--success);">$${p.abonado.toFixed(2)}</td><td style="color:var(--danger);">$${rest.toFixed(2)}</td><td><span class="badge ${ec}">${p.estado}</span></td></tr>`;
+        hh += `<tr><td>${p.id}</td><td>${p.fecha}</td><td>${p.clienteNombre}</td><td style="font-size:0.75em;">${p.items.map(i=>i.productoNombre+' x'+i.cantidad).join(', ')}</td><td>$${p.total.toFixed(2)}</td><td>$${p.abonado.toFixed(2)}</td><td>$${rest.toFixed(2)}</td><td><span class="badge ${ec}">${p.estado}</span></td></tr>`;
     });
     document.getElementById('tablaHistorial').innerHTML = hh + '</tbody></table>';
     
     // Inversiones
-    let hi = '<table><thead><tr><th>Fecha</th><th>Cat</th><th>Desc</th><th>Bs</th><th>USD</th></tr></thead><tbody>';
-    [...inversiones].reverse().forEach(i => { hi += `<tr><td>${i.fecha}</td><td>${i.categoria}</td><td>${i.descripcion}</td><td>Bs ${i.montoBs.toFixed(2)}</td><td class="precio-usd">$${i.montoUSD.toFixed(2)}</td></tr>`; });
+    let hi = '<table><thead><tr><th>Fecha</th><th>Cat</th><th>Desc</th><th>Bs</th><th>USD</th><th>Socio</th><th>Acc</th></tr></thead><tbody>';
+    [...inversiones].reverse().forEach((i, idx) => {
+        let idxOrig = inversiones.length - 1 - idx;
+        let socioNombre = i.socioID ? (socios.find(s=>s.id===i.socioID)?.nombre || i.socioID) : '-';
+        hi += `<tr><td>${i.fecha}</td><td>${i.categoria}</td><td>${i.descripcion}</td><td>Bs ${i.montoBs.toFixed(2)}</td><td>$${i.montoUSD.toFixed(2)}</td><td>${socioNombre}</td><td><button class="btn btn-warning btn-xs" onclick="editarInversion(${idxOrig})">✏️</button> <button class="btn btn-danger btn-xs" onclick="eliminarInversion(${idxOrig})">🗑️</button></td></tr>`;
+    });
     document.getElementById('tablaInversiones').innerHTML = hi + '</tbody></table>';
     
-    // Dashboard con 5 tarjetas
-    let tV = pedidos.reduce((s,p) => s + p.total, 0);
-    let tVBs = pedidos.reduce((s,p) => s + (p.totalVES||(p.total*p.tasaDolar)), 0);
-    let tP = pedidos.filter(p => p.estado !== 'Pagado').reduce((s,p) => s + (p.total-p.abonado), 0);
-    let tPBs = tP * tasaDolar;
-    let tC = pedidos.reduce((s,p) => s + p.abonado, 0);
-    let tI = inversiones.reduce((s,i) => s + i.montoUSD, 0);
-    let gan = tC - tI;
-    let totalAbonos = abonos.reduce((s,a) => s + a.montoUSD, 0);
-    let totalAbonosBs = abonos.reduce((s,a) => s + (a.montoVES||(a.montoUSD*a.tasaPago)||(a.montoUSD*tasaDolar)), 0);
+    // Socio select en inversiones
+    let selSocio = document.getElementById('socioInversion');
+    selSocio.innerHTML = '<option value="">-- Seleccionar --</option>' + socios.map(s => `<option value="${s.id}">${s.nombre} (${s.porcentaje}%)</option>`).join('');
     
+    // Socios
+    let hs = '<table><thead><tr><th>Nombre</th><th>%</th><th>Tel</th><th>Acc</th></tr></thead><tbody>';
+    socios.forEach(s => { hs += `<tr><td><strong>${s.nombre}</strong></td><td>${s.porcentaje}%</td><td>${s.telefono}</td><td><button class="btn btn-warning btn-xs" onclick="editarSocio('${s.id}')">✏️</button> <button class="btn btn-danger btn-xs" onclick="eliminarSocio('${s.id}')">🗑️</button></td></tr>`; });
+    document.getElementById('tablaSocios').innerHTML = hs + '</tbody></table>';
+    
+    // Dashboard
+    let tV = pedidos.reduce((s,p)=>s+p.total,0);
+    let tP = pedidos.filter(p=>p.estado!=='Pagado').reduce((s,p)=>s+(p.total-p.abonado),0);
+    let tA = abonos.reduce((s,a)=>s+a.montoUSD,0);
+    let tI = inversiones.reduce((s,i)=>s+i.montoUSD,0);
+    let gan = tA - tI;
     document.getElementById('statsCards').innerHTML = `
-        <div class="stats-card"><div class="stat-label">💰 Ventas Totales</div><div class="stat-value">$${tV.toFixed(0)}</div><div class="stat-value-sm">Bs ${tVBs.toFixed(0)}</div></div>
-        <div class="stats-card"><div class="stat-label">💵 Pagos Recibidos</div><div class="stat-value" style="color:var(--success);">$${totalAbonos.toFixed(0)}</div><div class="stat-value-sm">Bs ${totalAbonosBs.toFixed(0)}</div></div>
-        <div class="stats-card"><div class="stat-label">⚠️ Por Cobrar</div><div class="stat-value" style="color:var(--danger);">$${tP.toFixed(0)}</div><div class="stat-value-sm">Bs ${tPBs.toFixed(0)}</div></div>
+        <div class="stats-card"><div class="stat-label">💰 Ventas</div><div class="stat-value">$${tV.toFixed(0)}</div><div class="stat-value-sm">Bs ${(tV*tasaDolar).toFixed(0)}</div></div>
+        <div class="stats-card"><div class="stat-label">💵 Pagos</div><div class="stat-value" style="color:var(--success);">$${tA.toFixed(0)}</div><div class="stat-value-sm">Bs ${(tA*tasaDolar).toFixed(0)}</div></div>
+        <div class="stats-card"><div class="stat-label">⚠️ Por Cobrar</div><div class="stat-value" style="color:var(--danger);">$${tP.toFixed(0)}</div><div class="stat-value-sm">Bs ${(tP*tasaDolar).toFixed(0)}</div></div>
         <div class="stats-card"><div class="stat-label">💸 Invertido</div><div class="stat-value" style="color:var(--warning);">$${tI.toFixed(0)}</div></div>
         <div class="stats-card"><div class="stat-label">📈 Ganancia</div><div class="stat-value" style="color:${gan>=0?'var(--success)':'var(--danger)'};">$${gan.toFixed(0)}</div><div class="stat-value-sm">Bs ${(gan*tasaDolar).toFixed(0)}</div></div>`;
     
     // Últimos pedidos
-    let u = [...pedidos].reverse().slice(0,5);
     let hu = '<table><thead><tr><th>ID</th><th>Cliente</th><th>Total</th><th>Estado</th></tr></thead><tbody>';
-    u.forEach(p => { let ec = p.estado==='Pendiente'?'badge-pendiente':(p.estado==='Abonado'?'badge-abonado':'badge-pagado'); hu += `<tr><td>${p.id}</td><td>${p.clienteNombre}</td><td>$${p.total.toFixed(2)} <small class="precio-ves">Bs ${(p.totalVES||(p.total*p.tasaDolar)).toFixed(2)}</small></td><td><span class="badge ${ec}">${p.estado}</span></td></tr>`; });
+    [...pedidos].reverse().slice(0,5).forEach(p => { let ec = p.estado==='Pendiente'?'badge-pendiente':(p.estado==='Abonado'?'badge-abonado':'badge-pagado'); hu += `<tr><td>${p.id}</td><td>${p.clienteNombre}</td><td>$${p.total.toFixed(2)}</td><td><span class="badge ${ec}">${p.estado}</span></td></tr>`; });
     document.getElementById('ultimosPedidos').innerHTML = hu + '</tbody></table>';
     
     // Deudas
-    let d = pedidos.filter(p => p.estado !== 'Pagado').sort((a,b)=>(b.total-b.abonado)-(a.total-a.abonado)).slice(0,5);
-    let hd = '<table><thead><tr><th>Cliente</th><th>Debe USD</th><th>Debe Bs</th></tr></thead><tbody>';
-    d.forEach(p => { hd += `<tr><td>${p.clienteNombre}</td><td style="color:var(--danger);font-weight:bold;">$${(p.total-p.abonado).toFixed(2)}</td><td style="color:var(--danger);">Bs ${((p.total-p.abonado)*tasaDolar).toFixed(2)}</td></tr>`; });
+    let hd = '<table><thead><tr><th>Cliente</th><th>Debe</th></tr></thead><tbody>';
+    pedidos.filter(p=>p.estado!=='Pagado').sort((a,b)=>(b.total-b.abonado)-(a.total-a.abonado)).slice(0,5).forEach(p => { hd += `<tr><td>${p.clienteNombre}</td><td style="color:var(--danger);">$${(p.total-p.abonado).toFixed(2)}</td></tr>`; });
     document.getElementById('deudasPendientes').innerHTML = hd + '</tbody></table>';
     
-    // Ganancias
+    // Ganancias por categoría
     let vCat = {}, iCat = {};
-    pedidos.forEach(p => { p.items.forEach(item => { let cat = item.categoria || 'Otros'; if (!vCat[cat]) vCat[cat] = 0; vCat[cat] += item.precio * item.cantidad; }); });
-    inversiones.forEach(i => { if (!iCat[i.categoria]) iCat[i.categoria] = 0; iCat[i.categoria] += i.montoUSD; });
+    pedidos.forEach(p => { p.items.forEach(item => { let cat = item.categoria||'Otros'; if(!vCat[cat]) vCat[cat]=0; vCat[cat] += item.precio*item.cantidad; }); });
+    inversiones.forEach(i => { if(!iCat[i.categoria]) iCat[i.categoria]=0; iCat[i.categoria] += i.montoUSD; });
     let cats = new Set([...Object.keys(vCat), ...Object.keys(iCat)]);
-    let hg = '', hgd = '<table><thead><tr><th>Cat</th><th>Inv USD</th><th>Ventas USD</th><th>Gan USD</th><th>Gan Bs</th></tr></thead><tbody>';
-    cats.forEach(cat => { let v = vCat[cat]||0, inv = iCat[cat]||0, g = v - inv; hg += `<div class="stats-card" style="border-top-color:${g>=0?'var(--success)':'var(--danger)'};"><div class="stat-label">📌 ${cat}</div><div class="stat-value" style="color:${g>=0?'var(--success)':'var(--danger)'};">$${g.toFixed(0)}</div><div class="stat-value-sm">Bs ${(g*tasaDolar).toFixed(0)}</div></div>`; hgd += `<tr><td><strong>${cat}</strong></td><td>$${inv.toFixed(2)}</td><td>$${v.toFixed(2)}</td><td style="font-weight:bold;color:${g>=0?'var(--success)':'var(--danger)'};">$${g.toFixed(2)}</td><td style="color:${g>=0?'var(--success)':'var(--danger)'};">Bs ${(g*tasaDolar).toFixed(2)}</td></tr>`; });
-    document.getElementById('gananciasCategorias').innerHTML = hg || '<p style="color:var(--text-light);">Sin datos</p>';
+    let hg = '', hgd = '<table><thead><tr><th>Cat</th><th>Inv</th><th>Ventas</th><th>Gan USD</th><th>Gan Bs</th></tr></thead><tbody>';
+    cats.forEach(cat => { let v=vCat[cat]||0, inv=iCat[cat]||0, g=v-inv; hg += `<div class="stats-card" style="border-top-color:${g>=0?'var(--success)':'var(--danger)'};"><div class="stat-label">📌 ${cat}</div><div class="stat-value" style="color:${g>=0?'var(--success)':'var(--danger)'};">$${g.toFixed(0)}</div><div class="stat-value-sm">Bs ${(g*tasaDolar).toFixed(0)}</div></div>`; hgd += `<tr><td>${cat}</td><td>$${inv.toFixed(2)}</td><td>$${v.toFixed(2)}</td><td style="font-weight:bold;color:${g>=0?'var(--success)':'var(--danger)'};">$${g.toFixed(2)}</td><td>Bs ${(g*tasaDolar).toFixed(2)}</td></tr>`; });
+    document.getElementById('gananciasCategorias').innerHTML = hg || '<p>Sin datos</p>';
     document.getElementById('detalleGanancias').innerHTML = hgd + '</tbody></table>';
     
+    // Ganancia por socio
+    let gananciaTotal = tA - tI;
+    let hgs = '';
+    socios.forEach(s => {
+        let invSocio = inversiones.filter(i => i.socioID === s.id).reduce((sum,i) => sum + i.montoUSD, 0);
+        let ganSocio = gananciaTotal * (s.porcentaje / 100);
+        hgs += `<div class="stats-card" style="border-top-color:${ganSocio>=0?'var(--success)':'var(--danger)'};"><div class="stat-label">👤 ${s.nombre} (${s.porcentaje}%)</div><div class="stat-value" style="color:${ganSocio>=0?'var(--success)':'var(--danger)'};">$${ganSocio.toFixed(0)}</div><div class="stat-value-sm">Invirtió: $${invSocio.toFixed(0)}</div></div>`;
+    });
+    document.getElementById('gananciaSocios').innerHTML = hgs || '<p>Agrega socios para ver ganancias</p>';
+    
     mostrarCarrito();
+    dibujarGraficos();
     actualizarFechaHora();
 }
 
