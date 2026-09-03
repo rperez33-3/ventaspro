@@ -149,6 +149,10 @@
         <p style="color:var(--text-light);font-size:0.9em;">Sistema sincronizado en la nube</p>
         <input type="password" id="passwordInput" placeholder="Contraseña" onkeypress="if(event.key==='Enter')verificarPassword()">
         <button class="btn btn-primary btn-block" onclick="verificarPassword()">🔓 Ingresar</button>
+        <button class="btn btn-primary btn-block" onclick="verificarPassword()">🔓 Ingresar</button>
+<div id="loadingIndicator" style="display:none;margin-top:10px;color:var(--primary);font-size:0.85em;">
+    ⏳ Cargando sistema...
+</div>
         <p class="login-error" id="loginError">❌ Contraseña incorrecta</p>
         <hr style="margin:15px 0;border-color:var(--border);">
         <button class="btn btn-warning btn-block btn-sm" onclick="mostrarCambiarPassword()">⚙️ Cambiar Contraseña</button>
@@ -403,7 +407,7 @@ function cargarLocal() {
 
 // ==================== API ====================
 async function callAPI(funcion, ...args) {
-    let maxIntentos = 3;
+    let maxIntentos = 2;
     let ultimoError = null;
     
     for (let intento = 1; intento <= maxIntentos; intento++) {
@@ -477,7 +481,11 @@ async function verificarConexion() {
     try {
         let data = await callAPI('getAllData');
         if (data) {
-            mostrarToast('✅ Conexión restablecida');
+            // No mostrar toast cada vez que se reconecta
+            // Solo mostrar si antes estaba desconectado
+            if (document.getElementById('syncStatus').textContent.includes('Offline')) {
+                mostrarToast('✅ Conexión restablecida');
+            }
             await cargarDatos();
             cargarTodo();
         }
@@ -488,45 +496,8 @@ async function verificarConexion() {
     }
 }
 
-// Verificar conexión cada 30 segundos
-setInterval(verificarConexion, 30000);
-
-async function guardarPedidoConRetry(pedido) {
-    // Verificar si es un duplicado (mismo cliente, mismo total, en menos de 2 minutos)
-    if (ultimoPedidoGuardado && 
-        ultimoPedidoGuardado.clienteId === pedido.clienteId && 
-        ultimoPedidoGuardado.total === pedido.total &&
-        Date.now() - ultimoPedidoGuardado.timestamp < 120000) {
-        
-        mostrarToast('⚠️ Pedido duplicado detectado, ignorando', 'warning');
-        return false;
-    }
-    
-    // Intentar guardar con retry
-    let maxIntentos = 3;
-    for (let i = 0; i < maxIntentos; i++) {
-        try {
-            let result = await callAPI('guardarPedido', JSON.stringify(pedido));
-            if (result) {
-                ultimoPedidoGuardado = { ...pedido, timestamp: Date.now() };
-                return true;
-            }
-        } catch(e) {
-            console.log('Intento', i+1, 'fallido');
-        }
-        // Esperar 2 segundos antes de reintentar
-        if (i < maxIntentos - 1) await new Promise(r => setTimeout(r, 2000));
-    }
-    mostrarToast('⚠️ Error al guardar pedido', 'error');
-    return false;
-}
-
-function mostrarBannerConexion(mostrar) {
-    let banner = document.getElementById('connectionBanner');
-    if (banner) {
-        banner.style.display = mostrar ? 'block' : 'none';
-    }
-}
+// Aumentar intervalo de verificación a 60 segundos
+setInterval(verificarConexion, 60000);
 
 // ==================== FUNCIONES PARA BACKEND ====================
 async function actualizarPedido(pedidoJSON) {
@@ -535,27 +506,45 @@ async function actualizarPedido(pedidoJSON) {
 
 // ==================== CARGA DE DATOS ====================
 async function cargarDatos() {
+    // Primero cargar datos locales si existen
+    let localData = cargarLocal();
+    if (localData) {
+        aplicarDatos(localData);
+    }
+    
+    // Luego intentar cargar datos del servidor
     let data = await callAPI('getAllData');
     if (data) {
-        tasaDolar = data.tasa || 45;
-        password = data.password || 'admin2026';
-        productos = (data.productos||[]).map(p => ({id:p[0],nombre:p[1],categoria:p[2],precio:parseFloat(p[3]||0),stock:parseInt(p[4]||0),stockMinimo:parseInt(p[5]||5)}));
-        clientes = (data.clientes||[]).map(c => ({id:c[0],nombre:c[1],telefono:c[2]||'',departamento:c[3]||''}));
-        pedidos = (data.pedidos||[]).map(p => {
-            let items = []; try { items = JSON.parse(p[4]||'[]'); } catch(e) {}
-            return {id:p[0],fecha:p[1],clienteId:p[2],clienteNombre:p[3],items,total:parseFloat(p[5]||0),totalVES:parseFloat(p[6]||0),tasaDolar:parseFloat(p[7]||tasaDolar),estado:p[8]||'Pendiente',abonado:parseFloat(p[9]||0),fechaPago:p[10]||''};
-        });
-        abonos = (data.abonos||[]).map(a => ({id:a[0],fecha:a[1],pedidoId:a[2],cliente:a[3],montoUSD:parseFloat(a[4]||0),montoVES:parseFloat(a[5]||0),tasaPago:parseFloat(a[6]||tasaDolar),refPago:a[7]||'',banco:a[8]||'',nota:a[9]||''}));
-        inversiones = (data.inversiones||[]).map(i => ({id:i[0],fecha:i[1],categoria:i[2],descripcion:i[3]||'',montoBs:parseFloat(i[4]||0),tasaInversion:parseFloat(i[5]||tasaDolar),montoUSD:parseFloat(i[6]||0),socioID:i[7]||''}));
-        socios = (data.socios||[]).map(s => ({id:s[0],nombre:s[1],porcentaje:parseFloat(s[2]||50),telefono:s[3]||''}));
-        sessionStorage.setItem('vp_pass', password);
+        aplicarDatos(data);
+        guardarLocal(data);
     }
+}
+
+function aplicarDatos(data) {
+    tasaDolar = data.tasa || 45;
+    password = data.password || 'admin2026';
+    productos = (data.productos||[]).map(p => ({id:p[0],nombre:p[1],categoria:p[2],precio:parseFloat(p[3]||0),stock:parseInt(p[4]||0),stockMinimo:parseInt(p[5]||5)}));
+    clientes = (data.clientes||[]).map(c => ({id:c[0],nombre:c[1],telefono:c[2]||'',departamento:c[3]||''}));
+    pedidos = (data.pedidos||[]).map(p => {
+        let items = []; try { items = JSON.parse(p[4]||'[]'); } catch(e) {}
+        return {id:p[0],fecha:p[1],clienteId:p[2],clienteNombre:p[3],items,total:parseFloat(p[5]||0),totalVES:parseFloat(p[6]||0),tasaDolar:parseFloat(p[7]||tasaDolar),estado:p[8]||'Pendiente',abonado:parseFloat(p[9]||0),fechaPago:p[10]||''};
+    });
+    abonos = (data.abonos||[]).map(a => ({id:a[0],fecha:a[1],pedidoId:a[2],cliente:a[3],montoUSD:parseFloat(a[4]||0),montoVES:parseFloat(a[5]||0),tasaPago:parseFloat(a[6]||tasaDolar),refPago:a[7]||'',banco:a[8]||'',nota:a[9]||''}));
+    inversiones = (data.inversiones||[]).map(i => ({id:i[0],fecha:i[1],categoria:i[2],descripcion:i[3]||'',montoBs:parseFloat(i[4]||0),tasaInversion:parseFloat(i[5]||tasaDolar),montoUSD:parseFloat(i[6]||0),socioID:i[7]||''}));
+    socios = (data.socios||[]).map(s => ({id:s[0],nombre:s[1],porcentaje:parseFloat(s[2]||50),telefono:s[3]||''}));
+    sessionStorage.setItem('vp_pass', password);
 }
 
 function mostrarToast(m, t='success') {
     let el = document.createElement('div'); el.className = 'toast '+t; el.textContent = m;
     document.getElementById('toastContainer').appendChild(el);
     setTimeout(() => el.remove(), 3000);
+}
+function mostrarCargando(mostrar) {
+    let indicator = document.getElementById('loadingIndicator');
+    if (indicator) {
+        indicator.style.display = mostrar ? 'block' : 'none';
+    }
 }
 function actualizarFechaHora() { document.getElementById('fechaHora').textContent = new Date().toLocaleDateString('es-VE', {hour:'2-digit',minute:'2-digit'}); }
 function cambiarModulo(mod) {
@@ -589,14 +578,28 @@ document.addEventListener('click', function(e) { if (!e.target.closest('#resulta
 
 // ==================== AUTENTICACIÓN ====================
 async function verificarPassword() {
+    // Mostrar indicador de carga
+    document.getElementById('passwordInput').disabled = true;
+    document.querySelector('.btn-primary').textContent = '⏳ Cargando...';
+    mostrarCargando(true);
+    
     await cargarDatos();
+    
     if (document.getElementById('passwordInput').value === password) {
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('appContainer').classList.add('active');
         sessionStorage.setItem('vp_auth', 'true');
         if (localStorage.getItem('tema') === 'dark') document.body.classList.add('dark');
         iniciarApp();
-    } else { document.getElementById('loginError').style.display = 'block'; setTimeout(() => document.getElementById('loginError').style.display = 'none', 2000); }
+    } else { 
+        document.getElementById('loginError').style.display = 'block'; 
+        setTimeout(() => document.getElementById('loginError').style.display = 'none', 2000);
+        
+        // Restaurar botón
+        document.getElementById('passwordInput').disabled = false;
+        document.querySelector('.btn-primary').textContent = '🔓 Ingresar';
+        mostrarCargando(false);
+    }
 }
 function mostrarCambiarPassword() { let box = document.getElementById('cambiarPasswordBox'); box.style.display = box.style.display === 'none' ? 'block' : 'none'; }
 function mostrarCambiarPasswordDesdeApp() { document.getElementById('loginScreen').style.display = 'flex'; document.getElementById('appContainer').classList.remove('active'); mostrarCambiarPassword(); document.getElementById('cambiarPasswordBox').style.display = 'block'; }
