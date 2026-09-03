@@ -149,10 +149,9 @@
         <p style="color:var(--text-light);font-size:0.9em;">Sistema sincronizado en la nube</p>
         <input type="password" id="passwordInput" placeholder="Contraseña" onkeypress="if(event.key==='Enter')verificarPassword()">
         <button class="btn btn-primary btn-block" onclick="verificarPassword()">🔓 Ingresar</button>
-        <button class="btn btn-primary btn-block" onclick="verificarPassword()">🔓 Ingresar</button>
-<div id="loadingIndicator" style="display:none;margin-top:10px;color:var(--primary);font-size:0.85em;">
-    ⏳ Cargando sistema...
-</div>
+        <div id="loadingIndicator" style="display:none;margin-top:10px;color:var(--primary);font-size:0.85em;">
+            ⏳ Cargando sistema...
+        </div>
         <p class="login-error" id="loginError">❌ Contraseña incorrecta</p>
         <hr style="margin:15px 0;border-color:var(--border);">
         <button class="btn btn-warning btn-block btn-sm" onclick="mostrarCambiarPassword()">⚙️ Cambiar Contraseña</button>
@@ -173,8 +172,8 @@
 
 <div class="top-bar">
     <div id="connectionBanner" style="display:none;background:var(--warning);color:#1a1a1a;text-align:center;padding:8px;font-weight:600;">
-    ⚠️ Sin conexión - Reintentando automáticamente...
-</div>
+        ⚠️ Sin conexión - Reintentando automáticamente...
+    </div>
     <span>🏪 VentasPro | <span class="sync-dot sync-ok" id="syncDot"></span><span id="syncStatus">Conectado</span></span>
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <label style="color:white;">💲 Tasa:</label>
@@ -462,7 +461,7 @@ async function callAPI(funcion, ...args) {
         }
     }
 
-      mostrarBannerConexion(true)
+    mostrarBannerConexion(true)
     
     // Si todos los intentos fallaron
     document.getElementById('syncDot').className = 'sync-dot sync-err';
@@ -502,6 +501,13 @@ setInterval(verificarConexion, 60000);
 // ==================== FUNCIONES PARA BACKEND ====================
 async function actualizarPedido(pedidoJSON) {
     return await callAPI('actualizarPedido', pedidoJSON);
+}
+
+function mostrarBannerConexion(mostrar) {
+    let banner = document.getElementById('connectionBanner');
+    if (banner) {
+        banner.style.display = mostrar ? 'block' : 'none';
+    }
 }
 
 // ==================== CARGA DE DATOS ====================
@@ -705,7 +711,36 @@ async function registrarPedido() {
     }
 }
 
-// ==================== EDITAR/ELIMINAR PEDIDOS ====================
+async function guardarPedidoConRetry(pedido) {
+    // Verificar si es un duplicado (mismo cliente, mismo total, en menos de 2 minutos)
+    if (ultimoPedidoGuardado && 
+        ultimoPedidoGuardado.clienteId === pedido.clienteId && 
+        ultimoPedidoGuardado.total === pedido.total &&
+        Date.now() - ultimoPedidoGuardado.timestamp < 120000) {
+        
+        mostrarToast('⚠️ Pedido duplicado detectado, ignorando', 'warning');
+        return false;
+    }
+    
+    // Intentar guardar con retry
+    let maxIntentos = 3;
+    for (let i = 0; i < maxIntentos; i++) {
+        try {
+            let result = await callAPI('guardarPedido', JSON.stringify(pedido));
+            if (result) {
+                ultimoPedidoGuardado = { ...pedido, timestamp: Date.now() };
+                return true;
+            }
+        } catch(e) {
+            console.log('Intento', i+1, 'fallido');
+        }
+        // Esperar 2 segundos antes de reintentar
+        if (i < maxIntentos - 1) await new Promise(r => setTimeout(r, 2000));
+    }
+    mostrarToast('⚠️ Error al guardar pedido', 'error');
+    return false;
+}
+
 // ==================== EDITAR/ELIMINAR PEDIDOS ====================
 async function eliminarPedido(pedidoId) {
     if (operacionEnCurso) {
