@@ -168,6 +168,9 @@
 <div class="app-container" id="appContainer">
 
 <div class="top-bar">
+    <div id="connectionBanner" style="display:none;background:var(--warning);color:#1a1a1a;text-align:center;padding:8px;font-weight:600;">
+    ⚠️ Sin conexión - Reintentando automáticamente...
+</div>
     <span>🏪 VentasPro | <span class="sync-dot sync-ok" id="syncDot"></span><span id="syncStatus">Conectado</span></span>
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <label style="color:white;">💲 Tasa:</label>
@@ -351,6 +354,7 @@ let carrito = [];
 let deferredPrompt;
 let graficoVentasInstance = null, graficoCategoriasInstance = null;
 let ultimoPedidoGuardado = null;
+let operacionEnCurso = false;
 
 // ==================== PWA ====================
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -399,36 +403,93 @@ function cargarLocal() {
 
 // ==================== API ====================
 async function callAPI(funcion, ...args) {
-    try {
-        let url = API_URL + '?funcion=' + encodeURIComponent(funcion);
-        if (args.length > 0) url += '&args=' + encodeURIComponent(JSON.stringify(args));
-        let resp = await fetch(url);
-        let data = await resp.json();
-        document.getElementById('syncDot').className = 'sync-dot sync-ok';
-        document.getElementById('syncStatus').textContent = 'Conectado';
-        
-        // Guardar backup local
-        if (funcion === 'getAllData' && data) {
-            guardarLocal(data);
-        }
-        
-        return data;
-    } catch(e) {
-        document.getElementById('syncDot').className = 'sync-dot sync-err';
-        document.getElementById('syncStatus').textContent = 'Offline';
-        mostrarToast('⚠️ Sin conexión', 'warning');
-        
-        // Si es getAllData y estamos offline, usar backup local
-        if (funcion === 'getAllData') {
-            let backup = cargarLocal();
-            if (backup) {
-                mostrarToast('📱 Usando datos locales', 'warning');
-                return backup;
+    let maxIntentos = 3;
+    let ultimoError = null;
+    
+    for (let intento = 1; intento <= maxIntentos; intento++) {
+        try {
+            let url = API_URL + '?funcion=' + encodeURIComponent(funcion);
+            if (args.length > 0) url += '&args=' + encodeURIComponent(JSON.stringify(args));
+            
+            let resp = await fetch(url, { 
+                method: 'GET',
+                cache: 'no-store' // Evitar caché
+            });
+            
+            if (!resp.ok) {
+                throw new Error('HTTP ' + resp.status);
+            }
+            
+            let data = await resp.json();
+
+            mostrarBannerConexion(false);
+            
+            // Actualizar estado de conexión
+            document.getElementById('syncDot').className = 'sync-dot sync-ok';
+            document.getElementById('syncStatus').textContent = 'Conectado';
+            
+            // Guardar backup local
+            if (funcion === 'getAllData' && data) {
+                guardarLocal(data);
+            }
+            
+            return data;
+            
+        } catch(e) {
+            ultimoError = e;
+            console.log(`Intento ${intento} fallido para ${funcion}:`, e.message);
+            
+            // Si es getAllData y estamos offline, usar backup local
+            if (funcion === 'getAllData' && intento === maxIntentos) {
+                let backup = cargarLocal();
+                if (backup) {
+                    mostrarBannerConexion(true);
+                    document.getElementById('syncDot').className = 'sync-dot sync-err';
+                    document.getElementById('syncStatus').textContent = 'Offline (datos locales)';
+                    mostrarToast('📱 Usando datos locales', 'warning');
+                    return backup;
+                }
+            }
+            
+            // Esperar antes de reintentar
+            if (intento < maxIntentos) {
+                await new Promise(r => setTimeout(r, 2000 * intento));
             }
         }
-        return null;
+    }
+
+      mostrarBannerConexion(true)
+    
+    // Si todos los intentos fallaron
+    document.getElementById('syncDot').className = 'sync-dot sync-err';
+    document.getElementById('syncStatus').textContent = 'Offline';
+    mostrarToast('⚠️ Sin conexión', 'warning');
+    return null;
+}
+
+// ==================== RECONEXIÓN AUTOMÁTICA ====================
+let reconectando = false;
+
+async function verificarConexion() {
+    if (reconectando) return;
+    reconectando = true;
+    
+    try {
+        let data = await callAPI('getAllData');
+        if (data) {
+            mostrarToast('✅ Conexión restablecida');
+            await cargarDatos();
+            cargarTodo();
+        }
+    } catch(e) {
+        console.log('Sin conexión, reintentando...');
+    } finally {
+        reconectando = false;
     }
 }
+
+// Verificar conexión cada 30 segundos
+setInterval(verificarConexion, 30000);
 
 async function guardarPedidoConRetry(pedido) {
     // Verificar si es un duplicado (mismo cliente, mismo total, en menos de 2 minutos)
@@ -460,13 +521,16 @@ async function guardarPedidoConRetry(pedido) {
     return false;
 }
 
+function mostrarBannerConexion(mostrar) {
+    let banner = document.getElementById('connectionBanner');
+    if (banner) {
+        banner.style.display = mostrar ? 'block' : 'none';
+    }
+}
+
 // ==================== FUNCIONES PARA BACKEND ====================
 async function actualizarPedido(pedidoJSON) {
     return await callAPI('actualizarPedido', pedidoJSON);
-}
-
-async function eliminarPedido(pedidoId) {
-    return await callAPI('eliminarPedido', pedidoId);
 }
 
 // ==================== CARGA DE DATOS ====================
@@ -639,32 +703,58 @@ async function registrarPedido() {
 }
 
 // ==================== EDITAR/ELIMINAR PEDIDOS ====================
+// ==================== EDITAR/ELIMINAR PEDIDOS ====================
 async function eliminarPedido(pedidoId) {
-    let pedido = pedidos.find(p => p.id === pedidoId);
-    if (!pedido) return;
-    
-    if (!confirm(`¿Seguro que quieres eliminar el pedido #${pedido.id} de ${pedido.clienteNombre}?\n\nTotal: $${pedido.total.toFixed(2)}\n\nSe devolverá el stock de los productos.`)) {
+    if (operacionEnCurso) {
+        mostrarToast('⚠️ Operación en curso, espera...', 'warning');
         return;
     }
     
-    // Devolver stock al inventario
-    pedido.items.forEach(item => {
-        let producto = productos.find(p => p.id === item.productoId);
-        if (producto) {
-            let nuevoStock = producto.stock + item.cantidad;
-            // Actualizar stock en el servidor
-            callAPI('guardarProducto', producto.id, producto.nombre, producto.categoria, producto.precio, nuevoStock);
-        }
-    });
+    operacionEnCurso = true;
     
-    // Eliminar el pedido
-    let result = await callAPI('eliminarPedido', pedidoId);
-    if (result) {
-        await cargarDatos();
-        cargarTodo();
-        mostrarToast('✅ Pedido eliminado y stock restaurado');
-    } else {
-        mostrarToast('⚠️ Error al eliminar pedido', 'error');
+    try {
+        let pedido = pedidos.find(p => p.id === pedidoId);
+        if (!pedido) return;
+        
+        if (!confirm(`¿Seguro que quieres eliminar el pedido #${pedido.id} de ${pedido.clienteNombre}?\n\nTotal: $${pedido.total.toFixed(2)}\n\nSe devolverá el stock de los productos.`)) {
+            return;
+        }
+        
+        mostrarToast('⏳ Eliminando pedido...', 'warning');
+        
+        // Devolver stock al inventario
+        for (const item of pedido.items) {
+            let producto = productos.find(p => p.id === item.productoId);
+            if (producto) {
+                let nuevoStock = producto.stock + item.cantidad;
+                await callAPI('guardarProducto', producto.id, producto.nombre, producto.categoria, producto.precio, nuevoStock);
+            }
+        }
+        
+        // Eliminar el pedido con reintentos
+        let result = null;
+        for (let i = 0; i < 3; i++) {
+            result = await callAPI('eliminarPedido', pedidoId);
+            if (result && result.ok) break;
+            await new Promise(r => setTimeout(r, 2000));
+        }
+        
+        if (result && result.ok) {
+            // Actualizar variable local inmediatamente
+            pedidos = pedidos.filter(p => p.id !== pedidoId);
+            
+            // Recargar datos del servidor
+            await cargarDatos();
+            cargarTodo();
+            mostrarToast('✅ Pedido eliminado y stock restaurado');
+        } else {
+            mostrarToast('⚠️ Error al eliminar pedido. Intenta de nuevo.', 'error');
+        }
+    } catch(e) {
+        console.error('Error al eliminar pedido:', e);
+        mostrarToast('❌ Error inesperado', 'error');
+    } finally {
+        operacionEnCurso = false;
     }
 }
 
