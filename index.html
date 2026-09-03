@@ -349,7 +349,7 @@
 
 <script>
 // ⚠️ PEGA AQUÍ LA URL DE TU GOOGLE APPS SCRIPT
-const API_URL = 'https://script.google.com/macros/s/AKfycbxAgdAk_Wte2ANO2w27os7TzSp8m5DD6zivx7CWmOSlrg1LYybRkxZObgc5SkI9Qu0G/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbykLDVxoNAkaPWX225iwxtp7ro-iyf4OJdF7YEvx9u2O7_ZhJkP8AkMJXrk7mvOvJvb/exec';
 
 let tasaDolar = 45, password = 'admin2026';
 let productos = [], clientes = [], pedidos = [], abonos = [], inversiones = [], socios = [];
@@ -406,97 +406,28 @@ function cargarLocal() {
 
 // ==================== API ====================
 async function callAPI(funcion, ...args) {
-    let maxIntentos = 2;
-    let ultimoError = null;
-    
-    for (let intento = 1; intento <= maxIntentos; intento++) {
-        try {
-            let url = API_URL + '?funcion=' + encodeURIComponent(funcion);
-            if (args.length > 0) url += '&args=' + encodeURIComponent(JSON.stringify(args));
-            
-            let resp = await fetch(url, { 
-                method: 'GET',
-                cache: 'no-store' // Evitar caché
-            });
-            
-            if (!resp.ok) {
-                throw new Error('HTTP ' + resp.status);
-            }
-            
-            let data = await resp.json();
-
-            mostrarBannerConexion(false);
-            
-            // Actualizar estado de conexión
-            document.getElementById('syncDot').className = 'sync-dot sync-ok';
-            document.getElementById('syncStatus').textContent = 'Conectado';
-            
-            // Guardar backup local
-            if (funcion === 'getAllData' && data) {
-                guardarLocal(data);
-            }
-            
-            return data;
-            
-        } catch(e) {
-            ultimoError = e;
-            console.log(`Intento ${intento} fallido para ${funcion}:`, e.message);
-            
-            // Si es getAllData y estamos offline, usar backup local
-            if (funcion === 'getAllData' && intento === maxIntentos) {
-                let backup = cargarLocal();
-                if (backup) {
-                    mostrarBannerConexion(true);
-                    document.getElementById('syncDot').className = 'sync-dot sync-err';
-                    document.getElementById('syncStatus').textContent = 'Offline (datos locales)';
-                    mostrarToast('📱 Usando datos locales', 'warning');
-                    return backup;
-                }
-            }
-            
-            // Esperar antes de reintentar
-            if (intento < maxIntentos) {
-                await new Promise(r => setTimeout(r, 2000 * intento));
-            }
-        }
-    }
-
-    mostrarBannerConexion(true)
-    
-    // Si todos los intentos fallaron
-    document.getElementById('syncDot').className = 'sync-dot sync-err';
-    document.getElementById('syncStatus').textContent = 'Offline';
-    mostrarToast('⚠️ Sin conexión', 'warning');
-    return null;
-}
-
-// ==================== RECONEXIÓN AUTOMÁTICA ====================
-let reconectando = false;
-
-async function verificarConexion() {
-    if (reconectando) return;
-    reconectando = true;
-    
     try {
-        let data = await callAPI('getAllData');
-        if (data) {
-            // No mostrar toast cada vez que se reconecta
-            // Solo mostrar si antes estaba desconectado
-            if (document.getElementById('syncStatus').textContent.includes('Offline')) {
-                mostrarToast('✅ Conexión restablecida');
-            }
-            await cargarDatos();
-            cargarTodo();
+        let url = API_URL + '?funcion=' + encodeURIComponent(funcion);
+        if (args.length > 0) url += '&args=' + encodeURIComponent(JSON.stringify(args));
+        
+        let resp = await fetch(url);
+        let data = await resp.json();
+        
+        document.getElementById('syncDot').className = 'sync-dot sync-ok';
+        document.getElementById('syncStatus').textContent = 'Conectado';
+        
+        if (funcion === 'getAllData' && data) {
+            guardarLocal(data);
         }
+        
+        return data;
     } catch(e) {
-        console.log('Sin conexión, reintentando...');
-    } finally {
-        reconectando = false;
+        document.getElementById('syncDot').className = 'sync-dot sync-err';
+        document.getElementById('syncStatus').textContent = 'Offline';
+        mostrarToast('⚠️ Sin conexión', 'warning');
+        return null;
     }
 }
-
-// Aumentar intervalo de verificación a 60 segundos
-setInterval(verificarConexion, 60000);
 
 // ==================== FUNCIONES PARA BACKEND ====================
 async function actualizarPedido(pedidoJSON) {
@@ -512,13 +443,6 @@ function mostrarBannerConexion(mostrar) {
 
 // ==================== CARGA DE DATOS ====================
 async function cargarDatos() {
-    // Primero cargar datos locales si existen
-    let localData = cargarLocal();
-    if (localData) {
-        aplicarDatos(localData);
-    }
-    
-    // Luego intentar cargar datos del servidor
     let data = await callAPI('getAllData');
     if (data) {
         aplicarDatos(data);
