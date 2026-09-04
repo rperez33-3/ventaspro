@@ -149,9 +149,6 @@
         <p style="color:var(--text-light);font-size:0.9em;">Sistema sincronizado en la nube</p>
         <input type="password" id="passwordInput" placeholder="Contraseña" onkeypress="if(event.key==='Enter')verificarPassword()">
         <button class="btn btn-primary btn-block" onclick="verificarPassword()">🔓 Ingresar</button>
-        <div id="loadingIndicator" style="display:none;margin-top:10px;color:var(--primary);font-size:0.85em;">
-            ⏳ Cargando sistema...
-        </div>
         <p class="login-error" id="loginError">❌ Contraseña incorrecta</p>
         <hr style="margin:15px 0;border-color:var(--border);">
         <button class="btn btn-warning btn-block btn-sm" onclick="mostrarCambiarPassword()">⚙️ Cambiar Contraseña</button>
@@ -171,9 +168,6 @@
 <div class="app-container" id="appContainer">
 
 <div class="top-bar">
-    <div id="connectionBanner" style="display:none;background:var(--warning);color:#1a1a1a;text-align:center;padding:8px;font-weight:600;">
-        ⚠️ Sin conexión - Reintentando automáticamente...
-    </div>
     <span>🏪 VentasPro | <span class="sync-dot sync-ok" id="syncDot"></span><span id="syncStatus">Conectado</span></span>
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <label style="color:white;">💲 Tasa:</label>
@@ -348,16 +342,13 @@
 </div>
 
 <script>
-// ⚠️ PEGA AQUÍ LA URL DE TU GOOGLE APPS SCRIPT
-const API_URL = 'https://script.google.com/macros/s/AKfycbykLDVxoNAkaPWX225iwxtp7ro-iyf4OJdF7YEvx9u2O7_ZhJkP8AkMJXrk7mvOvJvb/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwB-RexUh7WK31kuOVLvveZExEjNm1wtBH0h72N1vQvOGbqie-OtWbufiVKcqQruYwy/exec';
 
 let tasaDolar = 45, password = 'admin2026';
 let productos = [], clientes = [], pedidos = [], abonos = [], inversiones = [], socios = [];
 let carrito = [];
 let deferredPrompt;
 let graficoVentasInstance = null, graficoCategoriasInstance = null;
-let ultimoPedidoGuardado = null;
-let operacionEnCurso = false;
 
 // ==================== PWA ====================
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -374,13 +365,6 @@ function instalarApp() {
     }
 }
 window.addEventListener('appinstalled', () => { document.getElementById('installBanner').style.display = 'none'; });
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('data:application/javascript,' + encodeURIComponent(
-            "const CACHE_NAME='ventaspro-v3';self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE_NAME));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(clients.claim());});self.addEventListener('fetch',e=>{e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)));});"
-        )).catch(() => {});
-    });
-}
 
 // ==================== MODO OSCURO ====================
 function toggleTema() {
@@ -390,19 +374,6 @@ function toggleTema() {
     localStorage.setItem('tema', document.body.classList.contains('dark') ? 'dark' : 'light');
 }
 if (localStorage.getItem('tema') === 'dark') { document.body.classList.add('dark'); }
-
-// ==================== ALMACENAMIENTO LOCAL ====================
-function guardarLocal(data) {
-    localStorage.setItem('ventaspro_backup', JSON.stringify(data));
-}
-
-function cargarLocal() {
-    try {
-        return JSON.parse(localStorage.getItem('ventaspro_backup'));
-    } catch(e) {
-        return null;
-    }
-}
 
 // ==================== API ====================
 async function callAPI(funcion, ...args) {
@@ -416,10 +387,6 @@ async function callAPI(funcion, ...args) {
         document.getElementById('syncDot').className = 'sync-dot sync-ok';
         document.getElementById('syncStatus').textContent = 'Conectado';
         
-        if (funcion === 'getAllData' && data) {
-            guardarLocal(data);
-        }
-        
         return data;
     } catch(e) {
         document.getElementById('syncDot').className = 'sync-dot sync-err';
@@ -429,52 +396,29 @@ async function callAPI(funcion, ...args) {
     }
 }
 
-// ==================== FUNCIONES PARA BACKEND ====================
-async function actualizarPedido(pedidoJSON) {
-    return await callAPI('actualizarPedido', pedidoJSON);
-}
-
-function mostrarBannerConexion(mostrar) {
-    let banner = document.getElementById('connectionBanner');
-    if (banner) {
-        banner.style.display = mostrar ? 'block' : 'none';
-    }
-}
-
 // ==================== CARGA DE DATOS ====================
 async function cargarDatos() {
     let data = await callAPI('getAllData');
     if (data) {
-        aplicarDatos(data);
-        guardarLocal(data);
+        tasaDolar = data.tasa || 45;
+        password = data.password || 'admin2026';
+        productos = (data.productos||[]).map(p => ({id:p[0],nombre:p[1],categoria:p[2],precio:parseFloat(p[3]||0),stock:parseInt(p[4]||0),stockMinimo:parseInt(p[5]||5)}));
+        clientes = (data.clientes||[]).map(c => ({id:c[0],nombre:c[1],telefono:c[2]||'',departamento:c[3]||''}));
+        pedidos = (data.pedidos||[]).map(p => {
+            let items = []; try { items = JSON.parse(p[4]||'[]'); } catch(e) {}
+            return {id:p[0],fecha:p[1],clienteId:p[2],clienteNombre:p[3],items,total:parseFloat(p[5]||0),totalVES:parseFloat(p[6]||0),tasaDolar:parseFloat(p[7]||tasaDolar),estado:p[8]||'Pendiente',abonado:parseFloat(p[9]||0),fechaPago:p[10]||''};
+        });
+        abonos = (data.abonos||[]).map(a => ({id:a[0],fecha:a[1],pedidoId:a[2],cliente:a[3],montoUSD:parseFloat(a[4]||0),montoVES:parseFloat(a[5]||0),tasaPago:parseFloat(a[6]||tasaDolar),refPago:a[7]||'',banco:a[8]||'',nota:a[9]||''}));
+        inversiones = (data.inversiones||[]).map(i => ({id:i[0],fecha:i[1],categoria:i[2],descripcion:i[3]||'',montoBs:parseFloat(i[4]||0),tasaInversion:parseFloat(i[5]||tasaDolar),montoUSD:parseFloat(i[6]||0),socioID:i[7]||''}));
+        socios = (data.socios||[]).map(s => ({id:s[0],nombre:s[1],porcentaje:parseFloat(s[2]||50),telefono:s[3]||''}));
+        sessionStorage.setItem('vp_pass', password);
     }
-}
-
-function aplicarDatos(data) {
-    tasaDolar = data.tasa || 45;
-    password = data.password || 'admin2026';
-    productos = (data.productos||[]).map(p => ({id:p[0],nombre:p[1],categoria:p[2],precio:parseFloat(p[3]||0),stock:parseInt(p[4]||0),stockMinimo:parseInt(p[5]||5)}));
-    clientes = (data.clientes||[]).map(c => ({id:c[0],nombre:c[1],telefono:c[2]||'',departamento:c[3]||''}));
-    pedidos = (data.pedidos||[]).map(p => {
-        let items = []; try { items = JSON.parse(p[4]||'[]'); } catch(e) {}
-        return {id:p[0],fecha:p[1],clienteId:p[2],clienteNombre:p[3],items,total:parseFloat(p[5]||0),totalVES:parseFloat(p[6]||0),tasaDolar:parseFloat(p[7]||tasaDolar),estado:p[8]||'Pendiente',abonado:parseFloat(p[9]||0),fechaPago:p[10]||''};
-    });
-    abonos = (data.abonos||[]).map(a => ({id:a[0],fecha:a[1],pedidoId:a[2],cliente:a[3],montoUSD:parseFloat(a[4]||0),montoVES:parseFloat(a[5]||0),tasaPago:parseFloat(a[6]||tasaDolar),refPago:a[7]||'',banco:a[8]||'',nota:a[9]||''}));
-    inversiones = (data.inversiones||[]).map(i => ({id:i[0],fecha:i[1],categoria:i[2],descripcion:i[3]||'',montoBs:parseFloat(i[4]||0),tasaInversion:parseFloat(i[5]||tasaDolar),montoUSD:parseFloat(i[6]||0),socioID:i[7]||''}));
-    socios = (data.socios||[]).map(s => ({id:s[0],nombre:s[1],porcentaje:parseFloat(s[2]||50),telefono:s[3]||''}));
-    sessionStorage.setItem('vp_pass', password);
 }
 
 function mostrarToast(m, t='success') {
     let el = document.createElement('div'); el.className = 'toast '+t; el.textContent = m;
     document.getElementById('toastContainer').appendChild(el);
     setTimeout(() => el.remove(), 3000);
-}
-function mostrarCargando(mostrar) {
-    let indicator = document.getElementById('loadingIndicator');
-    if (indicator) {
-        indicator.style.display = mostrar ? 'block' : 'none';
-    }
 }
 function actualizarFechaHora() { document.getElementById('fechaHora').textContent = new Date().toLocaleDateString('es-VE', {hour:'2-digit',minute:'2-digit'}); }
 function cambiarModulo(mod) {
@@ -508,28 +452,14 @@ document.addEventListener('click', function(e) { if (!e.target.closest('#resulta
 
 // ==================== AUTENTICACIÓN ====================
 async function verificarPassword() {
-    // Mostrar indicador de carga
-    document.getElementById('passwordInput').disabled = true;
-    document.querySelector('.btn-primary').textContent = '⏳ Cargando...';
-    mostrarCargando(true);
-    
     await cargarDatos();
-    
     if (document.getElementById('passwordInput').value === password) {
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('appContainer').classList.add('active');
         sessionStorage.setItem('vp_auth', 'true');
         if (localStorage.getItem('tema') === 'dark') document.body.classList.add('dark');
         iniciarApp();
-    } else { 
-        document.getElementById('loginError').style.display = 'block'; 
-        setTimeout(() => document.getElementById('loginError').style.display = 'none', 2000);
-        
-        // Restaurar botón
-        document.getElementById('passwordInput').disabled = false;
-        document.querySelector('.btn-primary').textContent = '🔓 Ingresar';
-        mostrarCargando(false);
-    }
+    } else { document.getElementById('loginError').style.display = 'block'; setTimeout(() => document.getElementById('loginError').style.display = 'none', 2000); }
 }
 function mostrarCambiarPassword() { let box = document.getElementById('cambiarPasswordBox'); box.style.display = box.style.display === 'none' ? 'block' : 'none'; }
 function mostrarCambiarPasswordDesdeApp() { document.getElementById('loginScreen').style.display = 'flex'; document.getElementById('appContainer').classList.remove('active'); mostrarCambiarPassword(); document.getElementById('cambiarPasswordBox').style.display = 'block'; }
@@ -579,14 +509,10 @@ async function registrarPedido() {
         return;
     }
     
-    // Generar ID único basado en timestamp
-    let idUnico = 'PED' + Date.now().toString().slice(-6);
-    
     let cliente;
     if (clienteId) {
         cliente = clientes.find(c => c.id === clienteId);
     } else {
-        // Guardar nuevo cliente
         await callAPI('guardarCliente', '', nombreNuevo, '', '');
         await cargarDatos();
         cliente = clientes[clientes.length - 1];
@@ -596,7 +522,7 @@ async function registrarPedido() {
     
     let total = carrito.reduce((s, i) => s + (i.precio * i.cantidad), 0);
     let pedido = {
-        id: idUnico,
+        id: 'PED' + (pedidos.length + 1).toString().padStart(3, '0'),
         fecha: fechaInputAFormato(document.getElementById('fechaPedido').value),
         clienteId: cliente.id,
         clienteNombre: cliente.nombre,
@@ -609,317 +535,9 @@ async function registrarPedido() {
         fechaPago: ''
     };
     
-    // Usar función con retry
-    let guardado = await guardarPedidoConRetry(pedido);
+    await callAPI('guardarPedido', JSON.stringify(pedido));
     
-    if (guardado) {
-        // Restar stock
-        carrito.forEach(item => {
-            let producto = productos.find(p => p.id === item.productoId);
-            if (producto) {
-                let nuevoStock = Math.max(0, producto.stock - item.cantidad);
-                // Actualizar en el servidor
-                callAPI('guardarProducto', producto.id, producto.nombre, producto.categoria, producto.precio, nuevoStock);
-            }
-        });
-        
-        carrito = [];
-        mostrarCarrito();
-        document.getElementById('nuevoClienteNombre').value = '';
-        document.getElementById('clientePedido').value = '';
-        await cargarDatos();
-        cargarTodo();
-        mostrarToast('✅ Pedido registrado: $' + total.toFixed(2));
-    } else {
-        mostrarToast('❌ Error al guardar pedido. Reintentando...', 'error');
-    }
-}
-
-async function guardarPedidoConRetry(pedido) {
-    // Verificar si es un duplicado (mismo cliente, mismo total, en menos de 2 minutos)
-    if (ultimoPedidoGuardado && 
-        ultimoPedidoGuardado.clienteId === pedido.clienteId && 
-        ultimoPedidoGuardado.total === pedido.total &&
-        Date.now() - ultimoPedidoGuardado.timestamp < 120000) {
-        
-        mostrarToast('⚠️ Pedido duplicado detectado, ignorando', 'warning');
-        return false;
-    }
-    
-    // Intentar guardar con retry
-    let maxIntentos = 3;
-    for (let i = 0; i < maxIntentos; i++) {
-        try {
-            let result = await callAPI('guardarPedido', JSON.stringify(pedido));
-            if (result) {
-                ultimoPedidoGuardado = { ...pedido, timestamp: Date.now() };
-                return true;
-            }
-        } catch(e) {
-            console.log('Intento', i+1, 'fallido');
-        }
-        // Esperar 2 segundos antes de reintentar
-        if (i < maxIntentos - 1) await new Promise(r => setTimeout(r, 2000));
-    }
-    mostrarToast('⚠️ Error al guardar pedido', 'error');
-    return false;
-}
-
-// ==================== EDITAR/ELIMINAR PEDIDOS ====================
-async function eliminarPedido(pedidoId) {
-    if (operacionEnCurso) {
-        mostrarToast('⚠️ Operación en curso, espera...', 'warning');
-        return;
-    }
-    
-    operacionEnCurso = true;
-    
-    try {
-        let pedido = pedidos.find(p => p.id === pedidoId);
-        if (!pedido) return;
-        
-        if (!confirm(`¿Seguro que quieres eliminar el pedido #${pedido.id} de ${pedido.clienteNombre}?\n\nTotal: $${pedido.total.toFixed(2)}\n\nSe devolverá el stock de los productos.`)) {
-            return;
-        }
-        
-        mostrarToast('⏳ Eliminando pedido...', 'warning');
-        
-        // Devolver stock al inventario
-        for (const item of pedido.items) {
-            let producto = productos.find(p => p.id === item.productoId);
-            if (producto) {
-                let nuevoStock = producto.stock + item.cantidad;
-                await callAPI('guardarProducto', producto.id, producto.nombre, producto.categoria, producto.precio, nuevoStock);
-            }
-        }
-        
-        // Eliminar el pedido con reintentos
-        let result = null;
-        for (let i = 0; i < 3; i++) {
-            result = await callAPI('eliminarPedido', pedidoId);
-            if (result && result.ok) break;
-            await new Promise(r => setTimeout(r, 2000));
-        }
-        
-        if (result && result.ok) {
-            // Actualizar variable local inmediatamente
-            pedidos = pedidos.filter(p => p.id !== pedidoId);
-            
-            // Recargar datos del servidor
-            await cargarDatos();
-            cargarTodo();
-            mostrarToast('✅ Pedido eliminado y stock restaurado');
-        } else {
-            mostrarToast('⚠️ Error al eliminar pedido. Intenta de nuevo.', 'error');
-        }
-    } catch(e) {
-        console.error('Error al eliminar pedido:', e);
-        mostrarToast('❌ Error inesperado', 'error');
-    } finally {
-        operacionEnCurso = false;
-    }
-}
-
-async function editarPedido(pedidoId) {
-    let pedido = pedidos.find(p => p.id === pedidoId);
-    if (!pedido) return;
-    
-    // Crear modal de edición
-    let itemsHtml = pedido.items.map((item, idx) => `
-        <div style="margin-bottom:10px;padding:8px;background:#f8fafc;border-radius:6px;">
-            <strong>${item.productoNombre}</strong>
-            <div style="display:flex;gap:5px;margin-top:5px;">
-                <input type="number" id="editCant_${idx}" value="${item.cantidad}" min="1" style="width:60px;padding:5px;">
-                <button class="btn btn-danger btn-xs" onclick="quitarItemEdicion(${idx})">✕</button>
-            </div>
-        </div>
-    `).join('');
-    
-    let modalHTML = `
-        <div class="modal-overlay active" id="modalEditarPedido" onclick="if(event.target===this) cerrarModalEditarPedido()">
-            <div class="modal">
-                <h3>✏️ Editar Pedido #${pedido.id}</h3>
-                <p><strong>Cliente:</strong> ${pedido.clienteNombre} | <strong>Fecha:</strong> ${pedido.fecha}</p>
-                <p style="color:var(--text-light);font-size:0.85em;">⚠️ Al cambiar cantidades, se ajustará el stock automáticamente</p>
-                
-                <div id="itemsEdicion">
-                    ${itemsHtml}
-                </div>
-                
-                <div style="margin-top:15px;">
-                    <button class="btn btn-primary btn-block" onclick="agregarItemEdicion('${pedido.id}')">➕ Agregar Producto</button>
-                </div>
-                
-                <div style="margin-top:15px;padding:10px;background:#f0f6ff;border-radius:8px;">
-                    Total Actual: <strong style="color:var(--primary);">$${pedido.total.toFixed(2)}</strong>
-                    <div style="margin-top:5px;">
-                        Total Nuevo: <strong style="color:var(--success);" id="nuevoTotalEdicion">$${pedido.total.toFixed(2)}</strong>
-                    </div>
-                </div>
-                
-                <div class="btn-group" style="margin-top:15px;">
-                    <button class="btn btn-success" onclick="confirmarEdicionPedido('${pedido.id}')">✅ Guardar Cambios</button>
-                    <button class="btn btn-outline" onclick="cerrarModalEditarPedido()">Cancelar</button>
-                </div>
-            </div>
-        </div>`;
-    
-    let mc = document.createElement('div');
-    mc.id = 'modalEditarPedidoContainer';
-    mc.innerHTML = modalHTML;
-    document.body.appendChild(mc);
-}
-
-function cerrarModalEditarPedido() {
-    let m = document.getElementById('modalEditarPedidoContainer');
-    if (m) m.remove();
-}
-
-function quitarItemEdicion(idx) {
-    document.getElementById(`editCant_${idx}`).parentElement.parentElement.remove();
-    recalcularTotalEdicion();
-}
-
-function agregarItemEdicion(pedidoId) {
-    let selectHtml = '<select id="nuevoProductoEdicion" style="width:200px;padding:8px;border-radius:6px;border:2px solid var(--border);">';
-    productos.forEach(p => {
-        selectHtml += `<option value="${p.id}" data-nombre="${p.nombre}" data-precio="${p.precio}" data-cat="${p.categoria}">${p.nombre} - $${p.precio.toFixed(2)}</option>`;
-    });
-    selectHtml += '</select>';
-    
-    let div = document.createElement('div');
-    div.innerHTML = `
-        <div style="margin-bottom:10px;padding:8px;background:#f8fafc;border-radius:6px;">
-            <div style="display:flex;gap:5px;align-items:center;">
-                ${selectHtml}
-                <input type="number" id="nuevaCantEdicion" value="1" min="1" style="width:50px;padding:5px;border-radius:6px;border:2px solid var(--border);">
-                <button class="btn btn-success btn-xs" onclick="agregarProductoEdicion()">+</button>
-                <button class="btn btn-danger btn-xs" onclick="this.parentElement.remove();recalcularTotalEdicion()">✕</button>
-            </div>
-        </div>`;
-    
-    document.getElementById('itemsEdicion').appendChild(div);
-}
-
-function agregarProductoEdicion() {
-    let select = document.getElementById('nuevoProductoEdicion');
-    let opt = select.options[select.selectedIndex];
-    let cantidad = parseInt(document.getElementById('nuevaCantEdicion').value) || 1;
-    
-    let div = document.createElement('div');
-    div.innerHTML = `
-        <div style="margin-bottom:10px;padding:8px;background:#f8fafc;border-radius:6px;">
-            <strong>${opt.dataset.nombre}</strong> ($${opt.dataset.precio})
-            <div style="display:flex;gap:5px;margin-top:5px;">
-                <input type="number" class="cantidad-edicion" value="${cantidad}" min="1" style="width:60px;padding:5px;" onchange="recalcularTotalEdicion()">
-                <button class="btn btn-danger btn-xs" onclick="this.parentElement.parentElement.remove();recalcularTotalEdicion()">✕</button>
-            </div>
-            <input type="hidden" class="producto-id-edicion" value="${opt.value}">
-            <input type="hidden" class="producto-nombre-edicion" value="${opt.dataset.nombre}">
-            <input type="hidden" class="producto-precio-edicion" value="${opt.dataset.precio}">
-            <input type="hidden" class="producto-categoria-edicion" value="${opt.dataset.cat || 'Otros'}">
-        </div>`;
-    
-    document.getElementById('itemsEdicion').appendChild(div);
-    document.getElementById('nuevoProductoEdicion').value = '';
-    document.getElementById('nuevaCantEdicion').value = '1';
-    recalcularTotalEdicion();
-}
-
-function recalcularTotalEdicion() {
-    let total = 0;
-    document.querySelectorAll('.cantidad-edicion').forEach(input => {
-        let parent = input.parentElement.parentElement;
-        let precio = parseFloat(parent.querySelector('.producto-precio-edicion').value) || 0;
-        let cantidad = parseInt(input.value) || 0;
-        total += precio * cantidad;
-    });
-    
-    let nuevoTotal = document.getElementById('nuevoTotalEdicion');
-    if (nuevoTotal) nuevoTotal.textContent = '$' + total.toFixed(2);
-}
-
-async function confirmarEdicionPedido(pedidoId) {
-    let pedido = pedidos.find(p => p.id === pedidoId);
-    if (!pedido) return;
-    
-    // Recopilar items editados de los inputs originales
-    let itemsEditados = [];
-    let idx = 0;
-    let originalItems = document.querySelectorAll('#itemsEdicion > div');
-    
-    originalItems.forEach(itemDiv => {
-        let inputCant = itemDiv.querySelector('input[type="number"]');
-        if (inputCant) {
-            let producto = pedido.items[idx];
-            if (producto) {
-                itemsEditados.push({
-                    ...producto,
-                    cantidad: parseInt(inputCant.value) || 1
-                });
-            }
-            idx++;
-        }
-    });
-    
-    // Recopilar nuevos items agregados
-    let nuevosItems = [];
-    document.querySelectorAll('.cantidad-edicion').forEach(input => {
-        let parent = input.parentElement.parentElement;
-        nuevosItems.push({
-            productoId: parent.querySelector('.producto-id-edicion').value,
-            productoNombre: parent.querySelector('.producto-nombre-edicion').value,
-            precio: parseFloat(parent.querySelector('.producto-precio-edicion').value),
-            cantidad: parseInt(input.value),
-            categoria: parent.querySelector('.producto-categoria-edicion')?.value || 'Otros'
-        });
-    });
-    
-    // Combinar items
-    let itemsFinales = [];
-    
-    // Primero agregar los items editados del pedido original
-    itemsEditados.forEach(itemEditado => {
-        // Verificar si ya existe en los nuevos
-        let existenteEnNuevos = nuevosItems.find(n => n.productoId === itemEditado.productoId);
-        if (existenteEnNuevos) {
-            // Combinar
-            itemsFinales.push({
-                ...itemEditado,
-                cantidad: itemEditado.cantidad + existenteEnNuevos.cantidad
-            });
-            // Marcar como ya procesado
-            existenteEnNuevos._procesado = true;
-        } else {
-            itemsFinales.push(itemEditado);
-        }
-    });
-    
-    // Agregar los nuevos items que no se procesaron
-    nuevosItems.forEach(nuevoItem => {
-        if (!nuevoItem._procesado) {
-            itemsFinales.push(nuevoItem);
-        }
-    });
-    
-    // Eliminar items con cantidad 0
-    itemsFinales = itemsFinales.filter(item => item.cantidad > 0);
-    
-    // Calcular nuevo total
-    let nuevoTotal = itemsFinales.reduce((sum, item) => sum + (item.precio * item.cantidad), 0);
-    
-    // Ajustar stock: devolver stock original y restar nuevo
-    // Primero devolver stock original
-    pedido.items.forEach(item => {
-        let producto = productos.find(p => p.id === item.productoId);
-        if (producto) {
-            let nuevoStock = producto.stock + item.cantidad;
-            callAPI('guardarProducto', producto.id, producto.nombre, producto.categoria, producto.precio, nuevoStock);
-        }
-    });
-    
-    // Luego restar stock de los nuevos items
-    itemsFinales.forEach(item => {
+    carrito.forEach(item => {
         let producto = productos.find(p => p.id === item.productoId);
         if (producto) {
             let nuevoStock = Math.max(0, producto.stock - item.cantidad);
@@ -927,25 +545,13 @@ async function confirmarEdicionPedido(pedidoId) {
         }
     });
     
-    // Actualizar pedido
-    let pedidoActualizado = {
-        ...pedido,
-        items: itemsFinales,
-        total: nuevoTotal,
-        totalVES: parseFloat((nuevoTotal * tasaDolar).toFixed(2))
-    };
-    
-    // Guardar cambios
-    let result = await callAPI('actualizarPedido', JSON.stringify(pedidoActualizado));
-    
-    if (result) {
-        cerrarModalEditarPedido();
-        await cargarDatos();
-        cargarTodo();
-        mostrarToast('✅ Pedido actualizado correctamente');
-    } else {
-        mostrarToast('⚠️ Error al actualizar pedido', 'error');
-    }
+    carrito = [];
+    mostrarCarrito();
+    document.getElementById('nuevoClienteNombre').value = '';
+    document.getElementById('clientePedido').value = '';
+    await cargarDatos();
+    cargarTodo();
+    mostrarToast('✅ Pedido registrado: $' + total.toFixed(2));
 }
 
 // ==================== COBRANZA COMPLETA ====================
@@ -984,7 +590,6 @@ function cargarCobranza() {
             </div>
         </div>`;
     
-    // ===== PEDIDOS PENDIENTES =====
     if (pedsPendientes.length > 0) {
         html += '<h4 style="margin-bottom:10px;">⚠️ Pedidos Pendientes</h4>';
         html += '<table><thead><tr><th>ID</th><th>Fecha</th><th>Productos</th><th>Total</th><th>Abonado</th><th>Restante USD</th><th>Restante Bs</th><th>Estado</th><th>Acción</th></tr></thead><tbody>';
@@ -1020,7 +625,6 @@ function cargarCobranza() {
         </tr></tbody></table>`;
     }
     
-    // ===== PEDIDOS PAGADOS =====
     let pedsPagados = peds.filter(p => p.estado === 'Pagado');
     if (pedsPagados.length > 0) {
         html += '<h4 style="margin-top:20px;">✅ Pedidos Pagados</h4>';
@@ -1032,7 +636,6 @@ function cargarCobranza() {
         html += '</tbody></table>';
     }
     
-    // ===== HISTORIAL DE PAGOS (ABONOS) =====
     let abs = abonos.filter(a => peds.some(p => p.id === a.pedidoId));
     if (abs.length > 0) {
         html += '<h4 style="margin-top:20px;">💵 Historial de Pagos</h4>';
@@ -1088,95 +691,6 @@ async function guardarTasa() { let val=parseFloat(document.getElementById('tasaD
 // ==================== REPORTE CORREO ====================
 function enviarReporteEmail() { let tV=pedidos.reduce((s,p)=>s+p.total,0), tP=pedidos.filter(p=>p.estado!=='Pagado').reduce((s,p)=>s+(p.total-p.abonado),0), tA=abonos.reduce((s,a)=>s+a.montoUSD,0); let reporte=`📊 REPORTE VENTASPRO - ${new Date().toLocaleDateString('es-VE')}\n━━━━━━━━━━━━━━━━━━━━━\n\n💰 Ventas: $${tV.toFixed(2)}\n💵 Pagos: $${tA.toFixed(2)}\n⚠️ Por Cobrar: $${tP.toFixed(2)}\n💲 Tasa: Bs ${tasaDolar.toFixed(2)}\n\n━━━━━━━━━━━━━━━━━━━━━\nGenerado por VentasPro - Rony Pérez`; window.open('mailto:?subject='+encodeURIComponent('Reporte VentasPro')+'&body='+encodeURIComponent(reporte),'_blank'); mostrarToast('📧 Abriendo correo...'); }
 
-// ==================== EXPORTAR CSV/EXCEL ====================
-function exportarCSV() {
-    // Encabezados
-    const encabezados = ['ID', 'Fecha', 'Cliente', 'Productos', 'Total USD', 'Total Bs', 'Abonado', 'Restante', 'Estado'];
-    
-    // Crear filas
-    const filas = pedidos.map(p => {
-        let restante = p.total - p.abonado;
-        let productosStr = p.items.map(item => `${item.productoNombre} x${item.cantidad} ($${(item.precio*item.cantidad).toFixed(2)})`).join(' | ');
-        
-        return [
-            p.id,
-            p.fecha,
-            p.clienteNombre,
-            productosStr,
-            p.total.toFixed(2),
-            p.totalVES.toFixed(2),
-            p.abonado.toFixed(2),
-            restante.toFixed(2),
-            p.estado
-        ];
-    });
-    
-    // Combinar
-    const contenido = [encabezados, ...filas]
-        .map(fila => fila.map(celda => `"${String(celda).replace(/"/g, '""')}"`).join(','))
-        .join('\n');
-    
-    // Descargar
-    const blob = new Blob(["\ufeff" + contenido], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `historial_ventas_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    
-    mostrarToast('📥 CSV descargado');
-}
-
-function exportarExcel() {
-    // Crear datos para Excel (usando formato HTML con tabla)
-    let html = '<html xmlns:x="urn:schemas-microsoft-com:office:excel">';
-    html += '<head><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>';
-    html += '<x:Name>Historial Ventas</x:Name>';
-    html += '<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>';
-    html += '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml></head>';
-    html += '<body>';
-    html += '<table border="1">';
-    
-    // Encabezados
-    html += '<tr style="background-color:#1e3a5f;color:white;font-weight:bold;">';
-    ['ID', 'Fecha', 'Cliente', 'Productos', 'Total USD', 'Total Bs', 'Abonado', 'Restante', 'Estado'].forEach(h => {
-        html += `<th>${h}</th>`;
-    });
-    html += '</tr>';
-    
-    // Datos
-    pedidos.forEach(p => {
-        let restante = p.total - p.abonado;
-        let productosStr = p.items.map(item => `${item.productoNombre} x${item.cantidad}`).join(', ');
-        
-        html += '<tr>';
-        html += `<td>${p.id}</td>`;
-        html += `<td>${p.fecha}</td>`;
-        html += `<td>${p.clienteNombre}</td>`;
-        html += `<td>${productosStr}</td>`;
-        html += `<td>${p.total.toFixed(2)}</td>`;
-        html += `<td>${p.totalVES.toFixed(2)}</td>`;
-        html += `<td>${p.abonado.toFixed(2)}</td>`;
-        html += `<td>${restante.toFixed(2)}</td>`;
-        html += `<td>${p.estado}</td>`;
-        html += '</tr>';
-    });
-    
-    html += '</table></body></html>';
-    
-    // Descargar
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `historial_ventas_${new Date().toISOString().split('T')[0]}.xls`;
-    link.click();
-    URL.revokeObjectURL(url);
-    
-    mostrarToast('📊 Excel descargado');
-}
-
 // ==================== GRÁFICOS ====================
 function dibujarGraficos() { let ventasPorMes={}, meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']; pedidos.forEach(p=>{let partes=p.fecha.split('/');if(partes.length===3){let mes=parseInt(partes[1])-1;if(!ventasPorMes[mes])ventasPorMes[mes]=0;ventasPorMes[mes]+=p.total;}}); let datosMeses=meses.map((m,i)=>ventasPorMes[i]||0); let ctx1=document.getElementById('graficoVentas'); if(ctx1){if(graficoVentasInstance)graficoVentasInstance.destroy();graficoVentasInstance=new Chart(ctx1,{type:'bar',data:{labels:meses,datasets:[{label:'Ventas USD',data:datosMeses,backgroundColor:'#1e3a5f',borderRadius:5}]},options:{responsive:true,plugins:{legend:{display:false}}}});} let vCat={}; pedidos.forEach(p=>{p.items.forEach(item=>{let cat=item.categoria||'Otros';if(!vCat[cat])vCat[cat]=0;vCat[cat]+=item.precio*item.cantidad;});}); let colores=['#1e3a5f','#2d6a4f','#c9a84c','#9b2226','#2563eb','#ca8a04'], labelsCat=Object.keys(vCat), datosCat=labelsCat.map(c=>vCat[c]); let ctx2=document.getElementById('graficoCategorias'); if(ctx2){if(graficoCategoriasInstance)graficoCategoriasInstance.destroy();graficoCategoriasInstance=new Chart(ctx2,{type:'doughnut',data:{labels:labelsCat,datasets:[{data:datosCat,backgroundColor:colores.slice(0,labelsCat.length)}]},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});} }
 
@@ -1200,36 +714,10 @@ function cargarTodo() {
     document.getElementById('clientePedido').innerHTML='<option value="">-- Seleccionar --</option>'+clientes.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
     document.getElementById('selectClienteCobranza').innerHTML='<option value="">-- Seleccionar --</option>'+clientes.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
     
-    // Historial con botones de editar/eliminar y exportar
-    let hh = '<div style="margin-bottom:15px;display:flex;gap:10px;flex-wrap:wrap;">';
-    hh += '<button class="btn btn-info" onclick="exportarCSV()">📥 Descargar CSV</button>';
-    hh += '<button class="btn btn-success" onclick="exportarExcel()">📊 Descargar Excel</button>';
-    hh += '</div>';
-
-    hh += '<table><thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total</th><th>Abonado</th><th>Restante</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>';
-    [...pedidos].reverse().forEach(p => {
-        let rest = p.total - p.abonado;
-        let ec = p.estado === 'Pendiente' ? 'badge-pendiente' : (p.estado === 'Abonado' ? 'badge-abonado' : 'badge-pagado');
-        
-        hh += `<tr>
-            <td>${p.id}</td>
-            <td>${p.fecha}</td>
-            <td>${p.clienteNombre}</td>
-            <td style="font-size:0.75em;">${p.items.map(i => i.productoNombre + ' x' + i.cantidad).join(', ')}</td>
-            <td>$${p.total.toFixed(2)}</td>
-            <td>$${p.abonado.toFixed(2)}</td>
-            <td>$${rest.toFixed(2)}</td>
-            <td><span class="badge ${ec}">${p.estado}</span></td>
-            <td>
-                <div style="display:flex;gap:4px;">
-                    <button class="btn btn-warning btn-xs" onclick="editarPedido('${p.id}')" title="Editar">✏️</button>
-                    <button class="btn btn-danger btn-xs" onclick="eliminarPedido('${p.id}')" title="Eliminar">🗑️</button>
-                </div>
-            </td>
-        </tr>`;
-    });
-    hh += '</tbody></table>';
-    document.getElementById('tablaHistorial').innerHTML = hh;
+    // Historial
+    let hh='<table><thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total</th><th>Abonado</th><th>Restante</th><th>Estado</th></tr></thead><tbody>';
+    [...pedidos].reverse().forEach(p=>{let rest=p.total-p.abonado, ec=p.estado==='Pendiente'?'badge-pendiente':(p.estado==='Abonado'?'badge-abonado':'badge-pagado');hh+=`<tr><td>${p.id}</td><td>${p.fecha}</td><td>${p.clienteNombre}</td><td style="font-size:0.75em;">${p.items.map(i=>i.productoNombre+' x'+i.cantidad).join(', ')}</td><td>$${p.total.toFixed(2)}</td><td>$${p.abonado.toFixed(2)}</td><td>$${rest.toFixed(2)}</td><td><span class="badge ${ec}">${p.estado}</span></td></tr>`;});
+    document.getElementById('tablaHistorial').innerHTML=hh+'</tbody></table>';
     
     // Inversiones
     let hi='<table><thead><tr><th>Fecha</th><th>Cat</th><th>Desc</th><th>Bs</th><th>USD</th><th>Socio</th><th>Acc</th></tr></thead><tbody>';
